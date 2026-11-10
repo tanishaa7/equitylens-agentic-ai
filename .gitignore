@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+cache/*
+!cache/.gitkeep
+.DS_Store
+logs/
+
+# private / local-only
+EquityLens*.pdf
+EquityLens*.pptx
+.streamlit/secrets.toml
+.claude/
+*.tmp

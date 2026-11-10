@@ -1,0 +1,10 @@
+[theme]
+primaryColor = "#2563eb"
+
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
+# Local runs add --server.address localhost (see README) so only this computer can open
+# the app. It isn't set here because Streamlit Cloud must listen on its own address.

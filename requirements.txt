@@ -1,0 +1,10 @@
+# Exact versions tested on 10 Nov 2026 (Python 3.12)
+google-genai==3.0.0
+pydantic==2.14.3
+python-dotenv==1.2.4
+yfinance==1.8.0
+pandas==3.1.1
+feedparser==6.0.14
+requests==2.34.2
+praw==8.0.3
+streamlit==1.67.0
