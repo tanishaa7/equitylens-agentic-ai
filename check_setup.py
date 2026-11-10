@@ -34,7 +34,7 @@ for pkg in ["google.genai", "pydantic", "dotenv", "yfinance", "pandas",
 import config  # noqa: E402
 
 keys = {
-    "GEMINI_API_KEY": (config.GEMINI_API_KEY, True),
+    "GEMINI_API_KEY": (config.gemini_key(), True),
     "REDDIT_CLIENT_ID": (config.REDDIT_CLIENT_ID, False),
     "REDDIT_CLIENT_SECRET": (config.REDDIT_CLIENT_SECRET, False),
 }
@@ -62,7 +62,7 @@ except Exception as e:  # network errors etc.
     report(FAIL, f"yfinance error: {e}")
 
 # 5. Live AI call (only if a key is set) — one tiny request on each model
-if config.GEMINI_API_KEY:
+if config.gemini_key():
     from pydantic import BaseModel
 
     from agents.llm import AIUnavailable, generate_sync

@@ -34,7 +34,23 @@ _cloud_secrets_to_env()
 # provider later is a change in one file plus this setting.
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+
+
+def gemini_key() -> str:
+    """The Gemini key, looked up again at call time: on Streamlit Cloud the Secrets
+    can be added or changed while the app is already running. Order: value found at
+    start → environment → Streamlit secrets. Whitespace / line breaks are stripped."""
+    global GEMINI_API_KEY
+    if not GEMINI_API_KEY:
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+    if not GEMINI_API_KEY:
+        try:
+            import streamlit as st
+            GEMINI_API_KEY = "".join(str(st.secrets.get("GEMINI_API_KEY", "")).split())
+        except Exception:   # no secrets configured (normal for local runs with .env)
+            pass
+    return GEMINI_API_KEY
 # Free-tier models. Specialists use the lighter model (higher free limits);
 # the judge uses the strongest free model.
 GEMINI_SPECIALIST_MODEL = os.getenv("GEMINI_SPECIALIST_MODEL", "gemini-3.5-flash-lite")

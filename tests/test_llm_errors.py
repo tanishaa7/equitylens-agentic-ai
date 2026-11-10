@@ -8,6 +8,7 @@ bad key) and checks the user sees the right message.
 from __future__ import annotations
 
 import asyncio
+import os
 from types import SimpleNamespace
 
 from google.genai import errors
@@ -123,6 +124,7 @@ def main():
 
     llm._get_client = original_client
     saved = config.GEMINI_API_KEY
+    saved_env = os.environ.pop("GEMINI_API_KEY", None)   # .env is loaded into the environment
     config.GEMINI_API_KEY = ""
     try:
         asyncio.run(generate("sys", "prompt", AgentFindings))
@@ -130,8 +132,13 @@ def main():
     except AIUnavailable as e:
         assert e.kind == "config" and "GEMINI_API_KEY" in e.detail
         print("[ok] missing key → config error (no crash)")
+        os.environ["GEMINI_API_KEY"] = "  test-key-added-later \n"
+        assert config.gemini_key() == "test-key-added-later"
+        print("[ok] key added after start (e.g. Streamlit Secrets) is picked up, whitespace stripped")
     finally:
         config.GEMINI_API_KEY = saved
+        if saved_env is not None:
+            os.environ["GEMINI_API_KEY"] = saved_env
 
     print("\nAll error-handling tests passed.")
 

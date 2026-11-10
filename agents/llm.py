@@ -146,13 +146,15 @@ def _get_client():
     if config.LLM_PROVIDER != "gemini":
         raise AIUnavailable("config", user_message("config"),
                             f"LLM_PROVIDER={config.LLM_PROVIDER!r} is not supported yet")
-    if not config.GEMINI_API_KEY:
-        raise AIUnavailable("config", user_message("config"), "GEMINI_API_KEY is not set in .env")
+    key = config.gemini_key()
+    if not key:
+        raise AIUnavailable("config", user_message("config"),
+                            "GEMINI_API_KEY is not set (.env locally, Secrets on Streamlit Cloud)")
     global _client_loop
     loop = asyncio.get_running_loop()
     if _client is None or _client_loop is not loop:   # async HTTP sessions are per loop
         from google import genai
-        _client = genai.Client(api_key=config.GEMINI_API_KEY)
+        _client = genai.Client(api_key=key)
         _client_loop = loop
     return _client
 

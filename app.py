@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sys
 import uuid
 from pathlib import Path
@@ -16,6 +17,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import config
 import limits
 import runlog
 from agents.orchestrator import LABELS, ComparisonRun, run_comparison
@@ -23,6 +25,9 @@ from data.common import fmt_pct
 from data.store import IST
 
 runlog.setup_logging()
+if not config.gemini_key():   # shows in the server log (Manage app → logs), never to visitors
+    logging.getLogger("equitylens.app").warning(
+        "GEMINI_API_KEY not found — add it to .env (local) or the app's Secrets (Streamlit Cloud).")
 
 st.set_page_config(page_title="EquityLens", page_icon="🔍", layout="wide")
 
