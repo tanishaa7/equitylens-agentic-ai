@@ -19,13 +19,14 @@ Social, Market data, Macro) → Bull vs bear debate → Father agent (judge)
 
 ## Team guide (diagrams)
 
-[`docs/how-equitylens-works.html`](docs/how-equitylens-works.html) explains the whole system with
-four diagrams: **architecture**, **data flow**, **how the scoring is done**, and **how the
-weightage is done** — with a worked TCS vs Infosys example from a live run.
+**Open it: https://tanishaa7.github.io/equitylens-agentic-ai/** (GitHub Pages, served from `docs/`)
 
-To view it: download the file (or clone the repo) and open it in a browser — GitHub shows
-HTML files as source code. To change it, edit `docs/page_template.html` (text) or
-`docs/build_diagrams.py` (diagrams) and run `python3 docs/build_diagrams.py`.
+It explains the whole system with four diagrams: **architecture**, **data flow**, **how the
+scoring is done**, and **how the weightage is done** — with a worked TCS vs Infosys example
+from a live run.
+
+To change it, edit `docs/page_template.html` (text) or `docs/build_diagrams.py` (diagrams),
+run `python3 docs/build_diagrams.py`, and push — Pages updates within a minute or two.
 
 ## Setup
 
