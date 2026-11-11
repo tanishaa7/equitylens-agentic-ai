@@ -17,6 +17,16 @@ User input → Planner → 5 specialist agents in parallel (Financials, News,
 Social, Market data, Macro) → Bull vs bear debate → Father agent (judge)
 → Comparison report.
 
+## Team guide (diagrams)
+
+[`docs/how-equitylens-works.html`](docs/how-equitylens-works.html) explains the whole system with
+four diagrams: **architecture**, **data flow**, **how the scoring is done**, and **how the
+weightage is done** — with a worked TCS vs Infosys example from a live run.
+
+To view it: download the file (or clone the repo) and open it in a browser — GitHub shows
+HTML files as source code. To change it, edit `docs/page_template.html` (text) or
+`docs/build_diagrams.py` (diagrams) and run `python3 docs/build_diagrams.py`.
+
 ## Setup
 
 ```bash
@@ -270,6 +280,7 @@ agents/
   orchestrator.py plan → parallel data fetch → parallel agents → debate → status
   debate.py       bull vs bear: opening cases + rebuttals, citation checks
   judge.py        six-lens table, weighted scores, verdict + checks, fallback
+docs/             team guide: architecture, data flow, scoring, weightage diagrams
 tests/            offline tests (no API key needed) — run all: python -m tests.run_all
                   python -m tests.test_llm_errors / test_financials_agent /
                   test_specialists / test_planner /

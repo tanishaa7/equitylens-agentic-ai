@@ -1,0 +1,290 @@
+<title>How EquityLens Works</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
+<style>
+/* Layout: a single reading column for prose, with full-width figure panels that scroll sideways on phones. */
+:root {
+  --bg: #f3f5f4; --surface: #ffffff; --surface-2: #f7f9f8;
+  --fg: #18201d; --muted: #56625d; --line: #d9dfdc; --line-strong: #a9b4af;
+  --accent: #0b6b57;
+  --code: #2c6a8a; --ai: #b85c00; --ext: #6a4c9c; --store: #5f7323;
+  --c-fin: #2c6a8a; --c-news: #b85c00; --c-mkt: #0b6b57; --c-mac: #7d4a8a; --c-soc: #6f7572;
+  --on-seg: #ffffff;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --display: "Newsreader", Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1412; --surface: #171d1b; --surface-2: #1c2421;
+  --fg: #e4ebe8; --muted: #9eaaa5; --line: #2b3532; --line-strong: #4f5c57;
+  --accent: #4fc3a5;
+  --code: #7bb7d8; --ai: #f2a24a; --ext: #b9a1e8; --store: #b6c96f;
+  --c-fin: #5fa3c8; --c-news: #e0913c; --c-mkt: #3fae92; --c-mac: #b585c2; --c-soc: #8d9491;
+  --on-seg: #0e1311; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0f1412; --surface: #171d1b; --surface-2: #1c2421;
+  --fg: #e4ebe8; --muted: #9eaaa5; --line: #2b3532; --line-strong: #4f5c57;
+  --accent: #4fc3a5;
+  --code: #7bb7d8; --ai: #f2a24a; --ext: #b9a1e8; --store: #b6c96f;
+  --c-fin: #5fa3c8; --c-news: #e0913c; --c-mkt: #3fae92; --c-mac: #b585c2; --c-soc: #8d9491;
+  --on-seg: #0e1311; color-scheme: dark;
+}
+
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+main { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2.1rem, 4vw, 3rem); }
+h2 { font-size: clamp(1.6rem, 3vw, 2.1rem); }
+h3 { font-size: 1rem; margin: 0; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
+header { display: flex; flex-direction: column; gap: 16px; }
+.lead { font-size: 1.12rem; color: var(--fg); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.86rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 22px; height: 14px; border-radius: 4px; border: 1.5px solid; flex: none; }
+.sw.code { border-color: var(--code); background: color-mix(in srgb, var(--code) 12%, var(--surface)); }
+.sw.ai { border-color: var(--ai); background: color-mix(in srgb, var(--ai) 14%, var(--surface)); }
+.sw.mixed { border-color: var(--ai); border-width: 2px; background: color-mix(in srgb, var(--code) 12%, var(--surface)); }
+.sw.ext { border-color: var(--ext); background: color-mix(in srgb, var(--ext) 12%, var(--surface)); }
+.sw.store { border-color: var(--store); background: color-mix(in srgb, var(--store) 14%, var(--surface)); }
+.sw.term { border-color: var(--muted); border-style: dashed; background: var(--surface); }
+
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+nav.toc a { text-decoration: none; color: var(--fg); border: 1px solid var(--line); background: var(--surface);
+  padding: 6px 12px; border-radius: 999px; font-size: 0.9rem; }
+nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+nav.toc b { font-family: var(--mono); font-weight: 500; color: var(--accent); margin-right: 6px; }
+
+section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 24px; }
+.sec-head { display: flex; flex-direction: column; gap: 6px; }
+.sec-num { font-family: var(--mono); color: var(--accent); font-size: 0.9rem; }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  display: flex; flex-direction: column; min-width: 0; }
+.scroll { overflow-x: auto; padding: 18px 18px 8px; }
+figcaption { padding: 4px 18px 16px; font-size: 0.88rem; color: var(--muted); max-width: none; }
+
+.dg { display: block; width: 100%; height: auto; min-width: 900px; color: var(--muted); }
+.dg text { font-family: var(--sans); fill: var(--fg); }
+.dg .mono { font-family: var(--mono); }
+.dg .t-title { font-size: 13px; font-weight: 600; }
+.dg .t-sub { font-size: 11px; fill: var(--muted); }
+.dg .t-cardtitle { font-size: 12px; font-weight: 600; }
+.dg .t-label { font-size: 11px; fill: var(--muted); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.dg .t-group { font-size: 12px; font-weight: 600; fill: var(--muted); letter-spacing: 0.03em; }
+.dg .t-lane { font-size: 13px; font-weight: 600; fill: var(--accent); }
+.dg .t-note { font-size: 12px; fill: var(--muted); font-style: italic; }
+.dg .t-op { font-size: 12px; fill: var(--accent); }
+.dg .t-seg { font-size: 12px; font-weight: 600; fill: var(--on-seg); }
+.dg .t-formula { font-size: 12px; fill: var(--fg); }
+.dg .n { stroke-width: 1.4; }
+.dg .n.code { fill: color-mix(in srgb, var(--code) 9%, var(--surface)); stroke: var(--code); }
+.dg .n.ai { fill: color-mix(in srgb, var(--ai) 12%, var(--surface)); stroke: var(--ai); }
+.dg .n.mixed { fill: color-mix(in srgb, var(--code) 9%, var(--surface)); stroke: var(--ai); stroke-width: 2.2; }
+.dg .n.store { fill: color-mix(in srgb, var(--store) 12%, var(--surface)); stroke: var(--store); }
+.dg .n.ext { fill: color-mix(in srgb, var(--ext) 10%, var(--surface)); stroke: var(--ext); }
+.dg .n.ext.ai-edge { stroke: var(--ai); stroke-width: 2; }
+.dg .n.user { fill: var(--surface); stroke: var(--fg); }
+.dg .n.term { fill: var(--surface); stroke: var(--muted); stroke-dasharray: 4 3; }
+.dg .n.dashed { stroke-dasharray: 5 4; }
+.dg .card { fill: var(--surface-2); stroke: var(--line); }
+.dg .boundary { fill: none; stroke: var(--line-strong); stroke-dasharray: 7 5; stroke-width: 1.5; }
+.dg .edge { fill: none; stroke: var(--muted); stroke-width: 1.4; }
+.dg .edge.dash { stroke-dasharray: 4 4; }
+.dg .edge.accent { stroke: var(--accent); }
+.dg .seg.fin { fill: var(--c-fin); } .dg .seg.news { fill: var(--c-news); } .dg .seg.mkt { fill: var(--c-mkt); }
+.dg .seg.mac { fill: var(--c-mac); } .dg .seg.soc { fill: var(--c-soc); }
+.dg .seg { stroke: var(--surface); stroke-width: 2; }
+.dg .hatch { stroke: var(--line-strong); stroke-width: 1; }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 18px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0;
+  display: flex; flex-direction: column; gap: 10px; }
+.panel p { font-size: 0.93rem; color: var(--muted); }
+ul.rules { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 8px; max-width: 76ch; }
+ul.rules li::marker { color: var(--accent); }
+
+.tbl-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.75rem; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+td.num, th.num { text-align: right; white-space: nowrap; }
+tr.total td { font-weight: 600; border-top: 2px solid var(--line-strong); border-bottom: none; }
+tr.off td { color: var(--muted); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: 0; }
+.dot.fin { background: var(--c-fin); } .dot.news { background: var(--c-news); } .dot.mkt { background: var(--c-mkt); }
+.dot.mac { background: var(--c-mac); } .dot.soc { background: var(--c-soc); }
+.tag { font-family: var(--mono); font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); white-space: nowrap; }
+.tag.ai { color: var(--ai); border-color: color-mix(in srgb, var(--ai) 45%, var(--line)); }
+.tag.code { color: var(--code); border-color: color-mix(in srgb, var(--code) 45%, var(--line)); }
+
+footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); padding-top: 18px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">EquityLens · team guide · November 2026</div>
+    <h1>How EquityLens works</h1>
+    <p class="lead">EquityLens compares 2–3 Indian listed companies from the same sector. A planner checks the
+      request, specialist AI analysts each judge one lens, a bull and a bear argue it out, and a judge gives the
+      verdict. Code does every calculation and checks every AI claim; the AI reads, scores and explains.</p>
+    <div class="legend" aria-label="Colour key used in all four diagrams">
+      <span><i class="sw code"></i>Code: same result every time</span>
+      <span><i class="sw ai"></i>AI step (Google Gemini)</span>
+      <span><i class="sw mixed"></i>Code decides, AI explains</span>
+      <span><i class="sw ext"></i>Outside service</span>
+      <span><i class="sw store"></i>Cache on disk</span>
+      <span><i class="sw term"></i>Run stops or falls back</span>
+    </div>
+    <nav class="toc" aria-label="Sections">
+      <a href="#architecture"><b>1</b>Architecture</a>
+      <a href="#data-flow"><b>2</b>Data flow</a>
+      <a href="#scoring"><b>3</b>Scoring</a>
+      <a href="#weightage"><b>3.1</b>Weightage</a>
+    </nav>
+  </header>
+
+  <section id="architecture">
+    <div class="sec-head">
+      <span class="sec-num">1</span>
+      <h2>Architecture</h2>
+      <p>Everything runs in one Python process on Streamlit Community Cloud, redeployed from GitHub on every
+        push. The orchestrator is the only part that calls the others. Every AI request goes through one wrapper,
+        and every data source goes through one disk cache, so limits, retries and caching live in one place each.</p>
+    </div>
+    <figure>
+      <div class="scroll">{{FIG1}}</div>
+      <figcaption>Arrows show who calls whom. Steps 1–5 are the order the orchestrator runs; steps 3 and 4 make
+        several AI calls at the same time, at most two in flight. The Gemini key lives in Streamlit Secrets, never in GitHub.</figcaption>
+    </figure>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>File</th><th>Job</th><th>Uses AI</th></tr></thead>
+        <tbody>
+          <tr><td><code>app.py</code></td><td>Website: input form, live progress, verdict card, five detail tabs, usage sidebar</td><td><span class="tag code">no</span></td></tr>
+          <tr><td><code>agents/orchestrator.py</code></td><td>Runs one comparison end to end; turns any failure into one message</td><td><span class="tag code">no</span></td></tr>
+          <tr><td><code>agents/planner.py</code>, <code>data/lookup.py</code></td><td>Names → NSE tickers, same-sector check, which agents run, weights</td><td><span class="tag code">no</span></td></tr>
+          <tr><td><code>data/collect.py</code> + <code>data/*.py</code></td><td>Prices, statements, ratios, news, Reddit, sector and macro data</td><td><span class="tag code">no</span></td></tr>
+          <tr><td><code>agents/financials.py</code>, <code>news.py</code>, <code>market.py</code>, <code>macro.py</code>, <code>social.py</code></td><td>Specialist analysts: build numbered facts, ask Gemini to score each company 0–10</td><td><span class="tag ai">yes</span></td></tr>
+          <tr><td><code>agents/common.py</code></td><td>Fact sheets and the checks on every AI answer (sources, numbers, wording)</td><td><span class="tag code">no</span></td></tr>
+          <tr><td><code>agents/debate.py</code></td><td>Bull and bear cases, then rebuttals</td><td><span class="tag ai">yes</span></td></tr>
+          <tr><td><code>agents/judge.py</code></td><td>Six-lens table, weighted scores, winner, confidence; AI writes the explanation</td><td><span class="tag ai">explains only</span></td></tr>
+          <tr><td><code>agents/llm.py</code></td><td>The only file that talks to Gemini: retries, model fallback, cool-down, friendly limit messages</td><td><span class="tag ai">yes</span></td></tr>
+          <tr><td><code>data/store.py</code>, <code>limits.py</code>, <code>runlog.py</code></td><td>Disk cache, public-demo limits, run log and today's usage</td><td><span class="tag code">no</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="data-flow">
+    <div class="sec-head">
+      <span class="sec-num">2</span>
+      <h2>Data flow</h2>
+      <p>Each step hands one defined object to the next. Dashed lines point to what a step produces, shown on the
+        right with real field names. Boxes on the left are where a run stops early or falls back.</p>
+    </div>
+    <figure>
+      <div class="scroll">{{FIG2}}</div>
+      <figcaption>Real example: TCS vs Infosys on 10 Nov 2026. A fresh comparison makes about 9 AI calls
+        (~25,000 tokens) and takes 1–2 minutes; the same pair later that day loads from the cache with no AI calls.</figcaption>
+    </figure>
+  </section>
+
+  <section id="scoring">
+    <div class="sec-head">
+      <span class="sec-num">3</span>
+      <h2>How the scoring is done</h2>
+      <p>Two things are computed side by side. Lane A decides the winner from the analysts' scores. Lane B compares
+        the raw numbers lens by lens. The judge explains both, but only code decides who is stronger.</p>
+    </div>
+    <figure>
+      <div class="scroll">{{FIG3}}</div>
+      <figcaption>Values from the TCS vs Infosys run: weighted scores 5.93 vs 5.55, a gap of 0.38, so the verdict is
+        "too close to call", with confidence 82% (High). On the lens table Infosys leads four lenses and TCS two.</figcaption>
+    </figure>
+    <ul class="rules">
+      <li>An analyst's score is relative: 5 means in line with the other companies in this comparison, not "average stock".</li>
+      <li>A winner is named only when it leads by at least 0.5 points out of 10. Below that the headline says it is too close to call.</li>
+      <li>A metric edge needs a clear gap: more than 5% better, or a small absolute gap for values near zero such as debt/equity. Near-ties show no edge.</li>
+      <li>The AI never sets a number. If its headline names a different winner, quotes a number that isn't in the facts, uses buy/sell wording, or mentions a metric that doesn't apply, the headline built from the numbers is shown instead.</li>
+    </ul>
+  </section>
+
+  <section id="weightage">
+    <div class="sec-head">
+      <span class="sec-num">3.1</span>
+      <h2>How the weightage is done</h2>
+      <p>Each analyst's score counts in proportion to its weight and to how confident it can be with the data it had.
+        The weights are re-balanced twice so they always add up to 100%.</p>
+    </div>
+    <figure>
+      <div class="scroll">{{FIG4}}</div>
+      <figcaption>Same TCS vs Infosys run. If an analyst fails during a run (for example Market data while Gemini is
+        busy), it is left out at the judge and the others are re-balanced the same way. Financials must succeed for any verdict.</figcaption>
+    </figure>
+
+    <div class="cols">
+      <div class="panel">
+        <h3>Worked example: TCS vs Infosys</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Analyst</th><th class="num">Planned</th><th class="num">Confidence</th><th class="num">Effective</th><th class="num">TCS</th><th class="num">Infosys</th></tr></thead>
+            <tbody>
+              <tr><td><i class="dot fin"></i>Financials</td><td class="num">44.4%</td><td class="num">0.90</td><td class="num">48.4%</td><td class="num">6.0</td><td class="num">6.0</td></tr>
+              <tr><td><i class="dot news"></i>News</td><td class="num">22.2%</td><td class="num">0.75</td><td class="num">20.2%</td><td class="num">6.0</td><td class="num">5.5</td></tr>
+              <tr><td><i class="dot mkt"></i>Market data</td><td class="num">16.7%</td><td class="num">0.85</td><td class="num">17.2%</td><td class="num">6.0</td><td class="num">4.0</td></tr>
+              <tr><td><i class="dot mac"></i>Macro &amp; sector</td><td class="num">16.7%</td><td class="num">0.70</td><td class="num">14.2%</td><td class="num">5.5</td><td class="num">6.0</td></tr>
+              <tr class="off"><td><i class="dot soc"></i>Social</td><td class="num">skipped</td><td class="num">—</td><td class="num">0%</td><td class="num">—</td><td class="num">—</td></tr>
+              <tr class="total"><td>Weighted score</td><td class="num">100%</td><td class="num"></td><td class="num">100%</td><td class="num">5.93</td><td class="num">5.55</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Infosys: 0.484×6.0 + 0.202×5.5 + 0.172×4.0 + 0.142×6.0 = 5.55. The 0.38 gap is under 0.5, so no winner is named.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Confidence ceilings (set by code)</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Analyst</th><th class="num">Starts at</th><th>Lowered by</th></tr></thead>
+            <tbody>
+              <tr><td><i class="dot fin"></i>Financials</td><td class="num">100%</td><td>−10% per data warning · −10% if a bank or NBFC is compared · −15% if under 3 years of data (floor 30%)</td></tr>
+              <tr><td><i class="dot news"></i>News</td><td class="num">75%</td><td>headlines only · −10% per company with fewer than 5 headlines (floor 30%)</td></tr>
+              <tr><td><i class="dot mkt"></i>Market data</td><td class="num">85%</td><td>past prices only · −10% if a company lacks 3 years of prices · −10% if benchmark data is missing</td></tr>
+              <tr><td><i class="dot mac"></i>Macro &amp; sector</td><td class="num">70%</td><td>indirect effect · −10% if there is no matching sector index</td></tr>
+              <tr><td><i class="dot soc"></i>Social</td><td class="num">50%</td><td>opinion, not evidence · −10% if a company has fewer than 5 posts</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The confidence used is the lower of the AI's own confidence and this ceiling. In the example, Financials
+          was capped at 90% because Infosys reports in USD (one data warning).</p>
+      </div>
+    </div>
+
+    <ul class="rules">
+      <li>Base weights live in <code>agents/planner.py</code> (<code>WEIGHTS</code>): Financials 40%, News 20%, Market data 15%, Macro 15%, Social 10%. Social is low on purpose: opinion is not evidence.</li>
+      <li>The debate also sees each analyst's weight and confidence, so the bull and bear know Financials is the strongest evidence and News is headline-only.</li>
+      <li>Overall confidence uses the same numbers: the weighted average confidence (82.5% here) × (0.5 + 0.5 × share of planned weight that ran, 100% here) = 82% → High.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Code: <a href="https://github.com/tanishaa7/equitylens-agentic-ai">github.com/tanishaa7/equitylens-agentic-ai</a> ·
+    Numbers from a live run on 10 Nov 2026 · EquityLens is a research prototype, not investment advice.
+  </footer>
+</main>

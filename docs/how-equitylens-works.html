@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How EquityLens Works</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
+<style>
+/* Layout: a single reading column for prose, with full-width figure panels that scroll sideways on phones. */
+:root {
+  --bg: #f3f5f4; --surface: #ffffff; --surface-2: #f7f9f8;
+  --fg: #18201d; --muted: #56625d; --line: #d9dfdc; --line-strong: #a9b4af;
+  --accent: #0b6b57;
+  --code: #2c6a8a; --ai: #b85c00; --ext: #6a4c9c; --store: #5f7323;
+  --c-fin: #2c6a8a; --c-news: #b85c00; --c-mkt: #0b6b57; --c-mac: #7d4a8a; --c-soc: #6f7572;
+  --on-seg: #ffffff;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --display: "Newsreader", Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1412; --surface: #171d1b; --surface-2: #1c2421;
+  --fg: #e4ebe8; --muted: #9eaaa5; --line: #2b3532; --line-strong: #4f5c57;
+  --accent: #4fc3a5;
+  --code: #7bb7d8; --ai: #f2a24a; --ext: #b9a1e8; --store: #b6c96f;
+  --c-fin: #5fa3c8; --c-news: #e0913c; --c-mkt: #3fae92; --c-mac: #b585c2; --c-soc: #8d9491;
+  --on-seg: #0e1311; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0f1412; --surface: #171d1b; --surface-2: #1c2421;
+  --fg: #e4ebe8; --muted: #9eaaa5; --line: #2b3532; --line-strong: #4f5c57;
+  --accent: #4fc3a5;
+  --code: #7bb7d8; --ai: #f2a24a; --ext: #b9a1e8; --store: #b6c96f;
+  --c-fin: #5fa3c8; --c-news: #e0913c; --c-mkt: #3fae92; --c-mac: #b585c2; --c-soc: #8d9491;
+  --on-seg: #0e1311; color-scheme: dark;
+}
+
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+main { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2.1rem, 4vw, 3rem); }
+h2 { font-size: clamp(1.6rem, 3vw, 2.1rem); }
+h3 { font-size: 1rem; margin: 0; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
+header { display: flex; flex-direction: column; gap: 16px; }
+.lead { font-size: 1.12rem; color: var(--fg); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.86rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 22px; height: 14px; border-radius: 4px; border: 1.5px solid; flex: none; }
+.sw.code { border-color: var(--code); background: color-mix(in srgb, var(--code) 12%, var(--surface)); }
+.sw.ai { border-color: var(--ai); background: color-mix(in srgb, var(--ai) 14%, var(--surface)); }
+.sw.mixed { border-color: var(--ai); border-width: 2px; background: color-mix(in srgb, var(--code) 12%, var(--surface)); }
+.sw.ext { border-color: var(--ext); background: color-mix(in srgb, var(--ext) 12%, var(--surface)); }
+.sw.store { border-color: var(--store); background: color-mix(in srgb, var(--store) 14%, var(--surface)); }
+.sw.term { border-color: var(--muted); border-style: dashed; background: var(--surface); }
+
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+nav.toc a { text-decoration: none; color: var(--fg); border: 1px solid var(--line); background: var(--surface);
+  padding: 6px 12px; border-radius: 999px; font-size: 0.9rem; }
+nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+nav.toc b { font-family: var(--mono); font-weight: 500; color: var(--accent); margin-right: 6px; }
+
+section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 24px; }
+.sec-head { display: flex; flex-direction: column; gap: 6px; }
+.sec-num { font-family: var(--mono); color: var(--accent); font-size: 0.9rem; }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  display: flex; flex-direction: column; min-width: 0; }
+.scroll { overflow-x: auto; padding: 18px 18px 8px; }
+figcaption { padding: 4px 18px 16px; font-size: 0.88rem; color: var(--muted); max-width: none; }
+
+.dg { display: block; width: 100%; height: auto; min-width: 900px; color: var(--muted); }
+.dg text { font-family: var(--sans); fill: var(--fg); }
+.dg .mono { font-family: var(--mono); }
+.dg .t-title { font-size: 13px; font-weight: 600; }
+.dg .t-sub { font-size: 11px; fill: var(--muted); }
+.dg .t-cardtitle { font-size: 12px; font-weight: 600; }
+.dg .t-label { font-size: 11px; fill: var(--muted); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.dg .t-group { font-size: 12px; font-weight: 600; fill: var(--muted); letter-spacing: 0.03em; }
+.dg .t-lane { font-size: 13px; font-weight: 600; fill: var(--accent); }
+.dg .t-note { font-size: 12px; fill: var(--muted); font-style: italic; }
+.dg .t-op { font-size: 12px; fill: var(--accent); }
+.dg .t-seg { font-size: 12px; font-weight: 600; fill: var(--on-seg); }
+.dg .t-formula { font-size: 12px; fill: var(--fg); }
+.dg .n { stroke-width: 1.4; }
+.dg .n.code { fill: color-mix(in srgb, var(--code) 9%, var(--surface)); stroke: var(--code); }
+.dg .n.ai { fill: color-mix(in srgb, var(--ai) 12%, var(--surface)); stroke: var(--ai); }
+.dg .n.mixed { fill: color-mix(in srgb, var(--code) 9%, var(--surface)); stroke: var(--ai); stroke-width: 2.2; }
+.dg .n.store { fill: color-mix(in srgb, var(--store) 12%, var(--surface)); stroke: var(--store); }
+.dg .n.ext { fill: color-mix(in srgb, var(--ext) 10%, var(--surface)); stroke: var(--ext); }
+.dg .n.ext.ai-edge { stroke: var(--ai); stroke-width: 2; }
+.dg .n.user { fill: var(--surface); stroke: var(--fg); }
+.dg .n.term { fill: var(--surface); stroke: var(--muted); stroke-dasharray: 4 3; }
+.dg .n.dashed { stroke-dasharray: 5 4; }
+.dg .card { fill: var(--surface-2); stroke: var(--line); }
+.dg .boundary { fill: none; stroke: var(--line-strong); stroke-dasharray: 7 5; stroke-width: 1.5; }
+.dg .edge { fill: none; stroke: var(--muted); stroke-width: 1.4; }
+.dg .edge.dash { stroke-dasharray: 4 4; }
+.dg .edge.accent { stroke: var(--accent); }
+.dg .seg.fin { fill: var(--c-fin); } .dg .seg.news { fill: var(--c-news); } .dg .seg.mkt { fill: var(--c-mkt); }
+.dg .seg.mac { fill: var(--c-mac); } .dg .seg.soc { fill: var(--c-soc); }
+.dg .seg { stroke: var(--surface); stroke-width: 2; }
+.dg .hatch { stroke: var(--line-strong); stroke-width: 1; }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 18px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0;
+  display: flex; flex-direction: column; gap: 10px; }
+.panel p { font-size: 0.93rem; color: var(--muted); }
+ul.rules { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 8px; max-width: 76ch; }
+ul.rules li::marker { color: var(--accent); }
+
+.tbl-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.75rem; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+td.num, th.num { text-align: right; white-space: nowrap; }
+tr.total td { font-weight: 600; border-top: 2px solid var(--line-strong); border-bottom: none; }
+tr.off td { color: var(--muted); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: 0; }
+.dot.fin { background: var(--c-fin); } .dot.news { background: var(--c-news); } .dot.mkt { background: var(--c-mkt); }
+.dot.mac { background: var(--c-mac); } .dot.soc { background: var(--c-soc); }
+.tag { font-family: var(--mono); font-size: 0.75rem; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); white-space: nowrap; }
+.tag.ai { color: var(--ai); border-color: color-mix(in srgb, var(--ai) 45%, var(--line)); }
+.tag.code { color: var(--code); border-color: color-mix(in srgb, var(--code) 45%, var(--line)); }
+
+footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); padding-top: 18px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">EquityLens · team guide · November 2026</div>
+    <h1>How EquityLens works</h1>
+    <p class="lead">EquityLens compares 2–3 Indian listed companies from the same sector. A planner checks the
+      request, specialist AI analysts each judge one lens, a bull and a bear argue it out, and a judge gives the
+      verdict. Code does every calculation and checks every AI claim; the AI reads, scores and explains.</p>
+    <div class="legend" aria-label="Colour key used in all four diagrams">
+      <span><i class="sw code"></i>Code: same result every time</span>
+      <span><i class="sw ai"></i>AI step (Google Gemini)</span>
+      <span><i class="sw mixed"></i>Code decides, AI explains</span>
+      <span><i class="sw ext"></i>Outside service</span>
+      <span><i class="sw store"></i>Cache on disk</span>
+      <span><i class="sw term"></i>Run stops or falls back</span>
+    </div>
+    <nav class="toc" aria-label="Sections">
+      <a href="#architecture"><b>1</b>Architecture</a>
+      <a href="#data-flow"><b>2</b>Data flow</a>
+      <a href="#scoring"><b>3</b>Scoring</a>
+      <a href="#weightage"><b>3.1</b>Weightage</a>
+    </nav>
+  </header>
+
+  <section id="architecture">
+    <div class="sec-head">
+      <span class="sec-num">1</span>
+      <h2>Architecture</h2>
+      <p>Everything runs in one Python process on Streamlit Community Cloud, redeployed from GitHub on every
+        push. The orchestrator is the only part that calls the others. Every AI request goes through one wrapper,
+        and every data source goes through one disk cache, so limits, retries and caching live in one place each.</p>
+    </div>
+    <figure>
+      <div class="scroll"><svg class="dg" viewBox="0 0 1120 770" role="img" aria-label="Architecture: a visitor&#x27;s browser talks to one Streamlit Cloud process. The orchestrator runs the planner, data collector, five specialist agents, the bull-vs-bear debate and the judge. AI steps go through one Gemini wrapper; data goes through a disk cache to Yahoo Finance, Google News and Reddit." xmlns="http://www.w3.org/2000/svg"><defs><marker id="f1-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker><marker id="f1-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker><pattern id="f1-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="none"/><line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" stroke-width="2" opacity="0.45"/></pattern></defs><rect class="n user" x="60" y="20" width="320" height="56" rx="8"/><text class="t-title" x="220.0" y="42" text-anchor="middle">Visitor&#x27;s browser</text><text class="t-sub" x="220.0" y="60" text-anchor="middle">opens the .streamlit.app link</text><rect class="n ext" x="760" y="20" width="320" height="56" rx="8"/><text class="t-title" x="920.0" y="42" text-anchor="middle">GitHub repo</text><text class="t-sub" x="920.0" y="60" text-anchor="middle">tanishaa7/equitylens-agentic-ai</text><rect class="boundary" x="24" y="110" width="1072" height="525" rx="12"/><text class="t-group" x="44" y="134" text-anchor="start">Streamlit Community Cloud · one Python process</text><polyline class="edge" points="220,76 220,150" marker-end="url(#f1-a)"/><text class="t-label mono" x="228" y="100" text-anchor="start">HTTPS</text><polyline class="edge" points="920,76 920,110" marker-end="url(#f1-a)"/><text class="t-label mono" x="912" y="98" text-anchor="end">redeploys on git push</text><rect class="n code" x="60" y="150" width="320" height="62" rx="8"/><text class="t-title" x="220.0" y="172" text-anchor="middle">Website · app.py</text><text class="t-sub" x="220.0" y="190" text-anchor="middle">form · live progress · verdict + 5 tabs</text><rect class="n code" x="420" y="150" width="240" height="62" rx="8"/><text class="t-title" x="540.0" y="172" text-anchor="middle">Usage limits · limits.py</text><text class="t-sub" x="540.0" y="190" text-anchor="middle">3 new / visitor / hour · 40 / day</text><rect class="n code" x="700" y="150" width="380" height="62" rx="8"/><text class="t-title" x="890.0" y="172" text-anchor="middle">Run log · runlog.py</text><text class="t-sub" x="890.0" y="190" text-anchor="middle">logs/runs.jsonl · logs/equitylens.log</text><polyline class="edge" points="380,181 420,181" marker-end="url(#f1-a)"/><text class="t-label mono" x="400" y="174" text-anchor="middle">gate</text><rect class="n code" x="60" y="262" width="1020" height="62" rx="8"/><text class="t-title" x="570.0" y="284" text-anchor="middle">Orchestrator · agents/orchestrator.py</text><text class="t-sub" x="570.0" y="302" text-anchor="middle">plan → saved result? → limit → fetch data → specialists (parallel) → bull vs bear → judge → save + log</text><polyline class="edge" points="220,212 220,262" marker-end="url(#f1-a)"/><text class="t-label mono" x="228" y="242" text-anchor="start">run_comparison()</text><polyline class="edge" points="890,262 890,212" marker-end="url(#f1-a)"/><text class="t-label mono" x="898" y="242" text-anchor="start">1 line per run</text><rect class="n code" x="60" y="376" width="170" height="74" rx="8"/><text class="t-title" x="145.0" y="398" text-anchor="middle">Planner</text><text class="t-sub" x="145.0" y="416" text-anchor="middle">names → NSE tickers</text><text class="t-sub" x="145.0" y="432" text-anchor="middle">sector check · weights</text><polyline class="edge" points="145.0,324 145.0,376" marker-end="url(#f1-a)"/><text class="t-label mono" x="153.0" y="354" text-anchor="start">1 plan</text><rect class="n code" x="280" y="376" width="180" height="74" rx="8"/><text class="t-title" x="370.0" y="398" text-anchor="middle">Data collector</text><text class="t-sub" x="370.0" y="416" text-anchor="middle">data/collect.py</text><text class="t-sub" x="370.0" y="432" text-anchor="middle">5 sources, in parallel</text><polyline class="edge" points="370,324 370,376" marker-end="url(#f1-a)"/><text class="t-label mono" x="378" y="354" text-anchor="start">2 data</text><rect class="n ai" x="500" y="376" width="200" height="74" rx="8"/><text class="t-title" x="600.0" y="398" text-anchor="middle">Specialist agents ×5</text><text class="t-sub" x="600.0" y="416" text-anchor="middle">Financials · News · Market</text><text class="t-sub" x="600.0" y="432" text-anchor="middle">Macro · Social</text><polyline class="edge" points="600.0,324 600.0,376" marker-end="url(#f1-a)"/><text class="t-label mono" x="608.0" y="354" text-anchor="start">3 analyse</text><rect class="n ai" x="740" y="376" width="160" height="74" rx="8"/><text class="t-title" x="820.0" y="398" text-anchor="middle">Bull vs bear</text><text class="t-sub" x="820.0" y="416" text-anchor="middle">agents/debate.py</text><text class="t-sub" x="820.0" y="432" text-anchor="middle">cases + rebuttals</text><polyline class="edge" points="820.0,324 820.0,376" marker-end="url(#f1-a)"/><text class="t-label mono" x="828.0" y="354" text-anchor="start">4 debate</text><rect class="n mixed" x="920" y="376" width="160" height="74" rx="8"/><text class="t-title" x="1000.0" y="398" text-anchor="middle">Judge</text><text class="t-sub" x="1000.0" y="416" text-anchor="middle">scores: code</text><text class="t-sub" x="1000.0" y="432" text-anchor="middle">explanation: AI</text><polyline class="edge" points="1000.0,324 1000.0,376" marker-end="url(#f1-a)"/><text class="t-label mono" x="1008.0" y="354" text-anchor="start">5 decide</text><rect class="n store" x="280" y="490" width="180" height="74" rx="8"/><text class="t-title" x="370.0" y="512" text-anchor="middle">Disk cache · store.py</text><text class="t-sub" x="370.0" y="530" text-anchor="middle">saved results: same day</text><text class="t-sub" x="370.0" y="546" text-anchor="middle">data: 30 min – 24 h</text><polyline class="edge" points="255,324 255,527 280,527" marker-end="url(#f1-a)"/><text class="t-label mono" x="247" y="470" text-anchor="end">saved?</text><polyline class="edge" points="370,450 370,490" marker-end="url(#f1-a)" marker-start="url(#f1-s)"/><text class="t-label mono" x="378" y="474" text-anchor="start">read / write</text><rect class="n code" x="500" y="490" width="200" height="74" rx="8"/><text class="t-title" x="600.0" y="512" text-anchor="middle">Facts + checks</text><text class="t-sub" x="600.0" y="530" text-anchor="middle">agents/common.py</text><text class="t-sub" x="600.0" y="546" text-anchor="middle">used by every AI step</text><rect class="n code" x="740" y="490" width="340" height="74" rx="8"/><text class="t-title" x="910.0" y="512" text-anchor="middle">Gemini wrapper · agents/llm.py</text><text class="t-sub" x="910.0" y="530" text-anchor="middle">2 calls at once · retries · fallback model</text><text class="t-sub" x="910.0" y="546" text-anchor="middle">10-min cool-down · key from Secrets</text><polyline class="edge" points="600,450 600,490" marker-end="url(#f1-a)"/><text class="t-label mono" x="608" y="474" text-anchor="start">build facts · verify</text><polyline class="edge" points="700,527 740,527" marker-end="url(#f1-a)"/><text class="t-label mono" x="720" y="520" text-anchor="middle">JSON</text><polyline class="edge" points="820,450 820,490" marker-end="url(#f1-a)"/><text class="t-label mono" x="828" y="474" text-anchor="start">AI calls</text><polyline class="edge" points="1000,450 1000,490" marker-end="url(#f1-a)"/><text class="t-label mono" x="1008" y="474" text-anchor="start">AI call</text><rect class="n ext" x="60" y="680" width="250" height="62" rx="8"/><text class="t-title" x="185.0" y="702" text-anchor="middle">Yahoo Finance</text><text class="t-sub" x="185.0" y="720" text-anchor="middle">symbol search · prices · statements</text><rect class="n ext" x="330" y="680" width="190" height="62" rx="8"/><text class="t-title" x="425.0" y="702" text-anchor="middle">Google News RSS</text><text class="t-sub" x="425.0" y="720" text-anchor="middle">India edition headlines</text><rect class="n ext dashed" x="540" y="680" width="160" height="62" rx="8"/><text class="t-title" x="620.0" y="702" text-anchor="middle">Reddit API</text><text class="t-sub" x="620.0" y="720" text-anchor="middle">optional · needs keys</text><rect class="n ext ai-edge" x="740" y="680" width="340" height="62" rx="8"/><text class="t-title" x="910.0" y="702" text-anchor="middle">Google Gemini API · free tier</text><text class="t-sub" x="910.0" y="720" text-anchor="middle">gemini-3.5-flash-lite · gemini-3.8-flash</text><polyline class="edge" points="145,450 145,680" marker-end="url(#f1-a)"/><text class="t-label mono" x="153" y="612" text-anchor="start">search (cached 24 h)</text><polyline class="edge" points="290,564 290,680" marker-end="url(#f1-a)"/><polyline class="edge" points="410,564 410,680" marker-end="url(#f1-a)"/><polyline class="edge dash" points="450,564 450,600 620,600 620,680" marker-end="url(#f1-a)"/><text class="t-label mono" x="462" y="592" text-anchor="start">fetch on cache miss</text><polyline class="edge" points="910,564 910,680" marker-end="url(#f1-a)"/><text class="t-label mono" x="918" y="612" text-anchor="start">HTTPS · JSON schema</text></svg></div>
+      <figcaption>Arrows show who calls whom. Steps 1–5 are the order the orchestrator runs; steps 3 and 4 make
+        several AI calls at the same time, at most two in flight. The Gemini key lives in Streamlit Secrets, never in GitHub.</figcaption>
+    </figure>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>File</th><th>Job</th><th>Uses AI</th></tr></thead>
+        <tbody>
+          <tr><td><code>app.py</code></td><td>Website: input form, live progress, verdict card, five detail tabs, usage sidebar</td><td><span class="tag code">no</span></td></tr>
+          <tr><td><code>agents/orchestrator.py</code></td><td>Runs one comparison end to end; turns any failure into one message</td><td><span class="tag code">no</span></td></tr>
+          <tr><td><code>agents/planner.py</code>, <code>data/lookup.py</code></td><td>Names → NSE tickers, same-sector check, which agents run, weights</td><td><span class="tag code">no</span></td></tr>
+          <tr><td><code>data/collect.py</code> + <code>data/*.py</code></td><td>Prices, statements, ratios, news, Reddit, sector and macro data</td><td><span class="tag code">no</span></td></tr>
+          <tr><td><code>agents/financials.py</code>, <code>news.py</code>, <code>market.py</code>, <code>macro.py</code>, <code>social.py</code></td><td>Specialist analysts: build numbered facts, ask Gemini to score each company 0–10</td><td><span class="tag ai">yes</span></td></tr>
+          <tr><td><code>agents/common.py</code></td><td>Fact sheets and the checks on every AI answer (sources, numbers, wording)</td><td><span class="tag code">no</span></td></tr>
+          <tr><td><code>agents/debate.py</code></td><td>Bull and bear cases, then rebuttals</td><td><span class="tag ai">yes</span></td></tr>
+          <tr><td><code>agents/judge.py</code></td><td>Six-lens table, weighted scores, winner, confidence; AI writes the explanation</td><td><span class="tag ai">explains only</span></td></tr>
+          <tr><td><code>agents/llm.py</code></td><td>The only file that talks to Gemini: retries, model fallback, cool-down, friendly limit messages</td><td><span class="tag ai">yes</span></td></tr>
+          <tr><td><code>data/store.py</code>, <code>limits.py</code>, <code>runlog.py</code></td><td>Disk cache, public-demo limits, run log and today's usage</td><td><span class="tag code">no</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="data-flow">
+    <div class="sec-head">
+      <span class="sec-num">2</span>
+      <h2>Data flow</h2>
+      <p>Each step hands one defined object to the next. Dashed lines point to what a step produces, shown on the
+        right with real field names. Boxes on the left are where a run stops early or falls back.</p>
+    </div>
+    <figure>
+      <div class="scroll"><svg class="dg" viewBox="0 0 1120 1636" role="img" aria-label="Data flow: what exists after each step, from the typed names to the verdict." xmlns="http://www.w3.org/2000/svg"><defs><marker id="f2-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker><marker id="f2-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker><pattern id="f2-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="none"/><line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" stroke-width="2" opacity="0.45"/></pattern></defs><rect class="n user" x="300" y="16" width="300" height="44" rx="8"/><text class="t-title" x="450.0" y="42.5" text-anchor="middle">You type: TCS · Infosys</text><polyline class="edge" points="450,60 450,104" marker-end="url(#f2-a)"/><text class="t-label mono" x="458" y="86.0" text-anchor="start">names</text><rect class="n code" x="300" y="104" width="300" height="72" rx="8"/><text class="t-title" x="450.0" y="126" text-anchor="middle">Planner</text><text class="t-sub" x="450.0" y="144" text-anchor="middle">names → NSE tickers (Yahoo search)</text><text class="t-sub" x="450.0" y="160" text-anchor="middle">same-sector check · picks agents</text><rect class="card" x="650" y="104" width="450" height="134" rx="6"/><text class="t-cardtitle" x="662" y="124">Plan</text><text class="t-sub mono" x="662" y="144">companies: TCS.NS, INFY.NS — name, sector,</text><text class="t-sub mono" x="662" y="160">  industry, market cap</text><text class="t-sub mono" x="662" y="176">agents: financials, news, market, macro</text><text class="t-sub mono" x="662" y="192">weights: 44% · 22% · 17% · 17%</text><text class="t-sub mono" x="662" y="208">  (social skipped: no Reddit keys)</text><text class="t-sub mono" x="662" y="224">data needed: financials, news, macro</text><polyline class="edge dash" points="600,140.0 650,140.0"/><rect class="n term" x="20" y="104" width="230" height="72" rx="8"/><text class="t-title" x="135.0" y="126" text-anchor="middle">Stop with a message</text><text class="t-sub" x="135.0" y="144" text-anchor="middle">ambiguous name → pick one</text><text class="t-sub" x="135.0" y="160" text-anchor="middle">not found · different sector</text><polyline class="edge" points="300,140.0 250,140.0" marker-end="url(#f2-a)"/><text class="t-label mono" x="275.0" y="133.0" text-anchor="middle">blocked</text><polyline class="edge" points="450,176 450,284" marker-end="url(#f2-a)"/><text class="t-label mono" x="458" y="234.0" text-anchor="start">Plan</text><rect class="n store" x="300" y="284" width="300" height="56" rx="8"/><text class="t-title" x="450.0" y="306" text-anchor="middle">Saved result today?</text><text class="t-sub" x="450.0" y="324" text-anchor="middle">key: date + sorted tickers + settings</text><rect class="card" x="650" y="284" width="450" height="70" rx="6"/><text class="t-cardtitle" x="662" y="304">cache/store/result/*.json</text><text class="t-sub mono" x="662" y="324">complete verdicts only</text><text class="t-sub mono" x="662" y="340">kept until midnight, India time</text><polyline class="edge dash" points="600,312.0 650,312.0"/><rect class="n term" x="20" y="284" width="230" height="56" rx="8"/><text class="t-title" x="135.0" y="306" text-anchor="middle">Show saved result</text><text class="t-sub" x="135.0" y="324" text-anchor="middle">0 AI calls · loads in seconds</text><polyline class="edge" points="300,312.0 250,312.0" marker-end="url(#f2-a)"/><text class="t-label mono" x="275.0" y="305.0" text-anchor="middle">yes</text><polyline class="edge" points="450,340 450,400" marker-end="url(#f2-a)"/><text class="t-label mono" x="458" y="374.0" text-anchor="start">no</text><rect class="n code" x="300" y="400" width="300" height="72" rx="8"/><text class="t-title" x="450.0" y="422" text-anchor="middle">Usage limit</text><text class="t-sub" x="450.0" y="440" text-anchor="middle">3 new per visitor per hour</text><text class="t-sub" x="450.0" y="456" text-anchor="middle">40 per day for the whole site</text><rect class="card" x="650" y="400" width="450" height="70" rx="6"/><text class="t-cardtitle" x="662" y="420">In memory only</text><text class="t-sub mono" x="662" y="440">hashed visitor id → times of new runs</text><text class="t-sub mono" x="662" y="456">resets when the app restarts</text><polyline class="edge dash" points="600,436.0 650,436.0"/><rect class="n term" x="20" y="400" width="230" height="56" rx="8"/><text class="t-title" x="135.0" y="422" text-anchor="middle">Show limit message</text><text class="t-sub" x="135.0" y="440" text-anchor="middle">nothing fetched, no AI used</text><polyline class="edge" points="300,428.0 250,428.0" marker-end="url(#f2-a)"/><text class="t-label mono" x="275.0" y="421.0" text-anchor="middle">over</text><polyline class="edge" points="450,472 450,518" marker-end="url(#f2-a)"/><text class="t-label mono" x="458" y="499.0" text-anchor="start">allowed</text><rect class="n code" x="300" y="518" width="300" height="72" rx="8"/><text class="t-title" x="450.0" y="540" text-anchor="middle">Fetch data</text><text class="t-sub" x="450.0" y="558" text-anchor="middle">one thread per company + macro</text><text class="t-sub" x="450.0" y="574" text-anchor="middle">every source goes through the cache</text><rect class="card" x="650" y="518" width="450" height="214" rx="6"/><text class="t-cardtitle" x="662" y="538">Per company (cache time)</text><text class="t-sub mono" x="662" y="558">market (30 min): price, 52-week range, returns</text><text class="t-sub mono" x="662" y="574">  1m / 6m / 1y / 3y, volatility, max drawdown</text><text class="t-sub mono" x="662" y="590">financials (12 h): 4 years + quarters, in ₹</text><text class="t-sub mono" x="662" y="606">  (USD reporters converted at period-end rate)</text><text class="t-sub mono" x="662" y="622">→ ratios (code): margins, ROE, ROCE, D/E, cover,</text><text class="t-sub mono" x="662" y="638">  FCF, cash conversion, CAGR, P/E, P/B, EV/EBITDA,</text><text class="t-sub mono" x="662" y="654">  latest quarter, data warnings</text><text class="t-sub mono" x="662" y="670">news (3 h): up to 30 headlines, last 12 months</text><text class="t-sub mono" x="662" y="686">social (3 h): Reddit posts (only with keys)</text><text class="t-sub mono" x="662" y="702">macro, shared (3 h): Nifty 50, sector index,</text><text class="t-sub mono" x="662" y="718">  USD/INR, Brent, sector + RBI headlines</text><polyline class="edge dash" points="600,554.0 650,554.0"/><rect class="n term" x="20" y="518" width="230" height="56" rx="8"/><text class="t-title" x="135.0" y="540" text-anchor="middle">Data error message</text><text class="t-sub" x="135.0" y="558" text-anchor="middle">Yahoo unreachable → try again</text><polyline class="edge" points="300,546.0 250,546.0" marker-end="url(#f2-a)"/><text class="t-label mono" x="275.0" y="539.0" text-anchor="middle">fails</text><polyline class="edge" points="450,590 450,778" marker-end="url(#f2-a)"/><text class="t-label mono" x="458" y="688.0" text-anchor="start">company data + macro</text><rect class="n code" x="300" y="778" width="300" height="72" rx="8"/><text class="t-title" x="450.0" y="800" text-anchor="middle">Fact sheets</text><text class="t-sub" x="450.0" y="818" text-anchor="middle">each agent&#x27;s slice → numbered facts</text><text class="t-sub" x="450.0" y="834" text-anchor="middle">source + formula on every fact</text><rect class="card" x="650" y="778" width="450" height="102" rx="6"/><text class="t-cardtitle" x="662" y="798">One Financials fact (real example)</text><text class="t-sub mono" x="662" y="818">[F9] ROCE: FY23 57.6% → FY24 62.6% →</text><text class="t-sub mono" x="662" y="834">     FY25 63.9% → FY26 58.5%</text><text class="t-sub mono" x="662" y="850">source: Yahoo annual statements ·</text><text class="t-sub mono" x="662" y="866">        EBIT / avg capital employed</text><polyline class="edge dash" points="600,814.0 650,814.0"/><polyline class="edge" points="450,850 450,926" marker-end="url(#f2-a)"/><text class="t-label mono" x="458" y="892.0" text-anchor="start">fact sheets</text><rect class="n ai" x="300" y="926" width="300" height="72" rx="8"/><text class="t-title" x="450.0" y="948" text-anchor="middle">Specialists ask Gemini</text><text class="t-sub" x="450.0" y="966" text-anchor="middle">4–5 in parallel, 2 calls at a time</text><text class="t-sub" x="450.0" y="982" text-anchor="middle">answer must fit a JSON schema</text><rect class="card" x="650" y="926" width="450" height="102" rx="6"/><text class="t-cardtitle" x="662" y="946">AgentFindings (raw AI answer)</text><text class="t-sub mono" x="662" y="966">summary</text><text class="t-sub mono" x="662" y="982">per company: score 0–10, key points,</text><text class="t-sub mono" x="662" y="998">  red flags, evidence {claim, &quot;F9&quot;}</text><text class="t-sub mono" x="662" y="1014">confidence 0–1 · data gaps</text><polyline class="edge dash" points="600,962.0 650,962.0"/><rect class="n ext" x="20" y="926" width="230" height="56" rx="8"/><text class="t-title" x="135.0" y="948" text-anchor="middle">Google Gemini API</text><text class="t-sub" x="135.0" y="966" text-anchor="middle">flash-lite, falls back to flash</text><polyline class="edge" points="300,954.0 250,954.0" marker-end="url(#f2-a)" marker-start="url(#f2-s)"/><text class="t-label mono" x="275.0" y="947.0" text-anchor="middle">JSON</text><polyline class="edge" points="450,998 450,1074" marker-end="url(#f2-a)"/><text class="t-label mono" x="458" y="1040.0" text-anchor="start">raw JSON</text><rect class="n code" x="300" y="1074" width="300" height="72" rx="8"/><text class="t-title" x="450.0" y="1096" text-anchor="middle">Check every claim</text><text class="t-sub" x="450.0" y="1114" text-anchor="middle">drops claims with no source, a number</text><text class="t-sub" x="450.0" y="1130" text-anchor="middle">not in the facts, or buy/sell words</text><rect class="card" x="650" y="1074" width="450" height="102" rx="6"/><text class="t-cardtitle" x="662" y="1094">AgentReport</text><text class="t-sub mono" x="662" y="1114">status: ok | failed | skipped</text><text class="t-sub mono" x="662" y="1130">findings (cleaned) · score clamped 0–10</text><text class="t-sub mono" x="662" y="1146">confidence ≤ ceiling set by data quality</text><text class="t-sub mono" x="662" y="1162">checks: &quot;Removed 1 claim(s) …&quot;</text><polyline class="edge dash" points="600,1110.0 650,1110.0"/><rect class="n term" x="20" y="1074" width="230" height="72" rx="8"/><text class="t-title" x="135.0" y="1096" text-anchor="middle">No verdict</text><text class="t-sub" x="135.0" y="1114" text-anchor="middle">Financials failed</text><text class="t-sub" x="135.0" y="1130" text-anchor="middle">(retried once if AI was busy)</text><polyline class="edge" points="300,1110.0 250,1110.0" marker-end="url(#f2-a)"/><text class="t-label mono" x="275.0" y="1103.0" text-anchor="middle">fails</text><polyline class="edge" points="450,1146 450,1222" marker-end="url(#f2-a)"/><text class="t-label mono" x="458" y="1188.0" text-anchor="start">verified reports</text><rect class="n ai" x="300" y="1222" width="300" height="72" rx="8"/><text class="t-title" x="450.0" y="1244" text-anchor="middle">Bull vs bear</text><text class="t-sub" x="450.0" y="1262" text-anchor="middle">reports → facts [E1…]</text><text class="t-sub" x="450.0" y="1278" text-anchor="middle">2 opening cases + 2 rebuttals</text><rect class="card" x="650" y="1222" width="450" height="102" rx="6"/><text class="t-cardtitle" x="662" y="1242">Debate</text><text class="t-sub mono" x="662" y="1262">arguments BULL-1 … BEAR-6:</text><text class="t-sub mono" x="662" y="1278">  company, point, strength, facts</text><text class="t-sub mono" x="662" y="1294">rebuttals: answers BEAR-2, concedes y/n</text><text class="t-sub mono" x="662" y="1310">every argument checked like step 7</text><polyline class="edge dash" points="600,1258.0 650,1258.0"/><polyline class="edge" points="450,1294 450,1370" marker-end="url(#f2-a)"/><text class="t-label mono" x="458" y="1336.0" text-anchor="start">verified debate</text><rect class="n mixed" x="300" y="1370" width="300" height="72" rx="8"/><text class="t-title" x="450.0" y="1392" text-anchor="middle">Judge</text><text class="t-sub" x="450.0" y="1410" text-anchor="middle">code: table, scores, winner, confidence</text><text class="t-sub" x="450.0" y="1426" text-anchor="middle">AI: headline + reasons from [J1…]</text><rect class="card" x="650" y="1370" width="450" height="118" rx="6"/><text class="t-cardtitle" x="662" y="1390">Verdict</text><text class="t-sub mono" x="662" y="1410">winner (or too close) · weighted scores</text><text class="t-sub mono" x="662" y="1426">six-lens table with edges · confidence</text><text class="t-sub mono" x="662" y="1442">headline · why · things to watch</text><text class="t-sub mono" x="662" y="1458">per company: bull, bear, red flags,</text><text class="t-sub mono" x="662" y="1474">  what changed last quarter</text><polyline class="edge dash" points="600,1406.0 650,1406.0"/><rect class="n term" x="20" y="1370" width="230" height="72" rx="8"/><text class="t-title" x="135.0" y="1392" text-anchor="middle">Numbers-only verdict</text><text class="t-sub" x="135.0" y="1410" text-anchor="middle">AI busy or daily limit:</text><text class="t-sub" x="135.0" y="1426" text-anchor="middle">same table + scores, template text</text><polyline class="edge" points="300,1406.0 250,1406.0" marker-end="url(#f2-a)"/><text class="t-label mono" x="275.0" y="1399.0" text-anchor="middle">AI down</text><polyline class="edge" points="450,1442 450,1534" marker-end="url(#f2-a)"/><text class="t-label mono" x="458" y="1492.0" text-anchor="start">Verdict</text><rect class="n code" x="300" y="1534" width="300" height="56" rx="8"/><text class="t-title" x="450.0" y="1556" text-anchor="middle">Deliver</text><text class="t-sub" x="450.0" y="1574" text-anchor="middle">website · cache · log</text><rect class="card" x="650" y="1534" width="450" height="86" rx="6"/><text class="t-cardtitle" x="662" y="1554">ComparisonRun</text><text class="t-sub mono" x="662" y="1574">→ website: verdict + 5 tabs</text><text class="t-sub mono" x="662" y="1590">→ cache: saved for the day (if complete)</text><text class="t-sub mono" x="662" y="1606">→ logs/runs.jsonl: 1 line, no keys or IPs</text><polyline class="edge dash" points="600,1562.0 650,1562.0"/></svg></div>
+      <figcaption>Real example: TCS vs Infosys on 10 Nov 2026. A fresh comparison makes about 9 AI calls
+        (~25,000 tokens) and takes 1–2 minutes; the same pair later that day loads from the cache with no AI calls.</figcaption>
+    </figure>
+  </section>
+
+  <section id="scoring">
+    <div class="sec-head">
+      <span class="sec-num">3</span>
+      <h2>How the scoring is done</h2>
+      <p>Two things are computed side by side. Lane A decides the winner from the analysts' scores. Lane B compares
+        the raw numbers lens by lens. The judge explains both, but only code decides who is stronger.</p>
+    </div>
+    <figure>
+      <div class="scroll"><svg class="dg" viewBox="0 0 1120 1225" role="img" aria-label="Scoring: lane A turns analyst scores into a weighted score and a winner or too-close call; lane B builds the six-lens head-to-head table. Both feed the judge, whose headline must pass code checks or is replaced by a template built from the numbers." xmlns="http://www.w3.org/2000/svg"><defs><marker id="f3-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker><marker id="f3-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker><pattern id="f3-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="none"/><line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" stroke-width="2" opacity="0.45"/></pattern></defs><text class="t-lane" x="40" y="26" text-anchor="start">A · analyst scores → weighted score</text><text class="t-lane" x="610" y="26" text-anchor="start">B · six-lens head-to-head (code only)</text><rect class="n ai" x="40" y="44" width="470" height="62" rx="8"/><text class="t-title" x="275.0" y="66" text-anchor="middle">Each analyst scores each company 0–10</text><text class="t-sub" x="275.0" y="84" text-anchor="middle">5 = in line with peers in this comparison</text><rect class="n code" x="40" y="136" width="470" height="62" rx="8"/><text class="t-title" x="275.0" y="158" text-anchor="middle">Clean the answer</text><text class="t-sub" x="275.0" y="176" text-anchor="middle">score clamped to 0–10 · bad claims removed</text><polyline class="edge" points="275,106 275,136" marker-end="url(#f3-a)"/><rect class="n code" x="40" y="228" width="470" height="62" rx="8"/><text class="t-title" x="275.0" y="250" text-anchor="middle">Cap each analyst&#x27;s confidence</text><text class="t-sub" x="275.0" y="268" text-anchor="middle">ceiling set by data quality (see 3.1)</text><polyline class="edge" points="275,198 275,228" marker-end="url(#f3-a)"/><rect class="n code" x="40" y="320" width="470" height="86" rx="8"/><text class="t-title" x="275.0" y="342" text-anchor="middle">Weighted score per company</text><text class="t-sub" x="275.0" y="360" text-anchor="middle">Σ(weight × confidence × score) ÷ Σ(weight × confidence)</text><text class="t-sub" x="275.0" y="376" text-anchor="middle">example: TCS 5.93 · Infosys 5.55</text><polyline class="edge" points="275,290 275,320" marker-end="url(#f3-a)"/><polyline class="edge" points="275,406 275,430" marker-end="url(#f3-a)"/><polygon class="n code" points="275,430.0 425.0,475 275,520.0 125.0,475"/><text class="t-title" x="275" y="472" text-anchor="middle">Top two within 0.5?</text><text class="t-sub" x="275" y="489" text-anchor="middle">example gap: 0.38</text><rect class="n code" x="40" y="560" width="220" height="62" rx="8"/><text class="t-title" x="150.0" y="582" text-anchor="middle">Too close to call</text><text class="t-sub" x="150.0" y="600" text-anchor="middle">no winner named</text><rect class="n code" x="290" y="560" width="220" height="62" rx="8"/><text class="t-title" x="400.0" y="582" text-anchor="middle">Winner = top score</text><text class="t-sub" x="400.0" y="600" text-anchor="middle">named in the headline</text><polyline class="edge" points="125,475 125,560" marker-end="url(#f3-a)"/><text class="t-label mono" x="133" y="520" text-anchor="start">yes</text><polyline class="edge" points="425,475 425,560" marker-end="url(#f3-a)"/><text class="t-label mono" x="433" y="520" text-anchor="start">no</text><rect class="n code" x="610" y="44" width="470" height="118" rx="8"/><text class="t-title" x="845.0" y="66" text-anchor="middle">14 metrics from the statements</text><text class="t-sub" x="845.0" y="84" text-anchor="middle">Growth: 3-year revenue &amp; profit CAGR</text><text class="t-sub" x="845.0" y="100" text-anchor="middle">Returns: ROE, ROCE</text><text class="t-sub" x="845.0" y="116" text-anchor="middle">Profitability: EBITDA &amp; net margin</text><text class="t-sub" x="845.0" y="132" text-anchor="middle">Safety: debt/equity, interest cover</text><text class="t-sub" x="845.0" y="148" text-anchor="middle">Cash: OCF/profit, FCF margin, receivable days</text><rect class="n code" x="610" y="192" width="470" height="102" rx="8"/><text class="t-title" x="845.0" y="214" text-anchor="middle">Edge per metric</text><text class="t-sub" x="845.0" y="232" text-anchor="middle">better value wins only if ahead by more than 5%</text><text class="t-sub" x="845.0" y="248" text-anchor="middle">merger-inflated growth: starred, no edge</text><text class="t-sub" x="845.0" y="264" text-anchor="middle">banks: ROCE, D/E, EBITDA etc. marked n/a</text><text class="t-sub" x="845.0" y="280" text-anchor="middle">valuation (P/E, P/B, EV/EBITDA): lower wins</text><polyline class="edge" points="845,162 845,192" marker-end="url(#f3-a)"/><rect class="n code" x="610" y="334" width="470" height="102" rx="8"/><text class="t-title" x="845.0" y="356" text-anchor="middle">Edge per lens</text><text class="t-sub" x="845.0" y="374" text-anchor="middle">the company with the most metric wins</text><text class="t-sub" x="845.0" y="390" text-anchor="middle">tie → split</text><text class="t-sub" x="845.0" y="406" text-anchor="middle">example: TCS → Returns, Profitability</text><text class="t-sub" x="845.0" y="422" text-anchor="middle">Infosys → Growth, Safety, Cash, Valuation</text><polyline class="edge" points="845,294 845,334" marker-end="url(#f3-a)"/><text class="t-note" x="620" y="466" text-anchor="start">Shown and explained, but it never changes</text><text class="t-note" x="620" y="482" text-anchor="start">the weighted score in lane A.</text><rect class="n code" x="240" y="680" width="640" height="86" rx="8"/><text class="t-title" x="560.0" y="702" text-anchor="middle">Overall confidence</text><text class="t-sub" x="560.0" y="720" text-anchor="middle">average analyst confidence (by weight) × (0.5 + 0.5 × share of weight that ran)</text><text class="t-sub" x="560.0" y="736" text-anchor="middle">− 0.1 if the debate failed · High ≥ 70% · Medium ≥ 45% · Low below</text><text class="t-sub" x="560.0" y="752" text-anchor="middle">example: 82% → High</text><polyline class="edge" points="150,622 150,652 300,652 300,680" marker-end="url(#f3-a)"/><polyline class="edge" points="400,622 400,680" marker-end="url(#f3-a)"/><text class="t-label mono" x="408" y="656" text-anchor="start">winner / too close</text><rect class="n ai" x="240" y="800" width="640" height="70" rx="8"/><text class="t-title" x="560.0" y="822" text-anchor="middle">Judge AI writes the explanation</text><text class="t-sub" x="560.0" y="840" text-anchor="middle">reads facts [J1…]: result, scores, lens table, red flags, debate</text><text class="t-sub" x="560.0" y="856" text-anchor="middle">writes headline · 3–5 reasons · things to watch · bull/bear per company</text><polyline class="edge" points="560,766 560,800" marker-end="url(#f3-a)"/><text class="t-label mono" x="568" y="788" text-anchor="start">confidence</text><polyline class="edge" points="1000,436 1000,835 880,835" marker-end="url(#f3-a)"/><text class="t-label mono" x="992" y="640" text-anchor="end">lens table + edges</text><polygon class="n code" points="430,910.0 610.0,958 430,1006.0 250.0,958"/><text class="t-title" x="430" y="962.5" text-anchor="middle">Headline passes checks?</text><polyline class="edge" points="560,870 560,890 430,890 430,910" marker-end="url(#f3-a)"/><text class="t-label mono" x="568" y="886" text-anchor="start">AI headline</text><rect class="n code" x="680" y="900" width="400" height="118" rx="8"/><text class="t-title" x="880.0" y="922" text-anchor="middle">Code checks the headline</text><text class="t-sub" x="880.0" y="940" text-anchor="middle">names the computed winner</text><text class="t-sub" x="880.0" y="956" text-anchor="middle">(or no “stronger:” when too close)</text><text class="t-sub" x="880.0" y="972" text-anchor="middle">every number appears in the facts</text><text class="t-sub" x="880.0" y="988" text-anchor="middle">no buy / sell / target-price wording</text><text class="t-sub" x="880.0" y="1004" text-anchor="middle">no metric that is n/a (e.g. debt for banks)</text><polyline class="edge dash" points="610,958 680,958"/><rect class="n ai" x="40" y="1050" width="260" height="52" rx="8"/><text class="t-title" x="170.0" y="1080.5" text-anchor="middle">Show the AI&#x27;s headline</text><rect class="n code" x="330" y="1050" width="420" height="68" rx="8"/><text class="t-title" x="540.0" y="1072" text-anchor="middle">Template headline from the numbers</text><text class="t-sub" x="540.0" y="1090" text-anchor="middle">e.g. “Too close to call (weighted scores</text><text class="t-sub" x="540.0" y="1106" text-anchor="middle">TCS 5.9 vs Infosys 5.5 out of 10).”</text><polyline class="edge" points="250,958 170,958 170,1050" marker-end="url(#f3-a)"/><text class="t-label mono" x="178" y="1010" text-anchor="start">yes</text><polyline class="edge" points="430,1006 430,1050" marker-end="url(#f3-a)"/><text class="t-label mono" x="438" y="1032" text-anchor="start">no</text><rect class="n code" x="240" y="1150" width="640" height="52" rx="8"/><text class="t-title" x="560.0" y="1180.5" text-anchor="middle">Verdict: winner or too close · scores · confidence · six-lens table · cited reasons</text><polyline class="edge" points="170,1102 170,1176 240,1176" marker-end="url(#f3-a)"/><polyline class="edge" points="540,1118 540,1150" marker-end="url(#f3-a)"/></svg></div>
+      <figcaption>Values from the TCS vs Infosys run: weighted scores 5.93 vs 5.55, a gap of 0.38, so the verdict is
+        "too close to call", with confidence 82% (High). On the lens table Infosys leads four lenses and TCS two.</figcaption>
+    </figure>
+    <ul class="rules">
+      <li>An analyst's score is relative: 5 means in line with the other companies in this comparison, not "average stock".</li>
+      <li>A winner is named only when it leads by at least 0.5 points out of 10. Below that the headline says it is too close to call.</li>
+      <li>A metric edge needs a clear gap: more than 5% better, or a small absolute gap for values near zero such as debt/equity. Near-ties show no edge.</li>
+      <li>The AI never sets a number. If its headline names a different winner, quotes a number that isn't in the facts, uses buy/sell wording, or mentions a metric that doesn't apply, the headline built from the numbers is shown instead.</li>
+    </ul>
+  </section>
+
+  <section id="weightage">
+    <div class="sec-head">
+      <span class="sec-num">3.1</span>
+      <h2>How the weightage is done</h2>
+      <p>Each analyst's score counts in proportion to its weight and to how confident it can be with the data it had.
+        The weights are re-balanced twice so they always add up to 100%.</p>
+    </div>
+    <figure>
+      <div class="scroll"><svg class="dg" viewBox="0 0 1120 520" role="img" aria-label="Weightage: base weights 40/20/15/15/10; Social is skipped and the rest re-balanced to 44.4/22.2/16.7/16.7; each is multiplied by the analyst&#x27;s confidence (0.90, 0.75, 0.85, 0.70), giving 82.5% in total; dividing by 0.825 gives effective weights 48.4/20.2/17.2/14.2." xmlns="http://www.w3.org/2000/svg"><defs><marker id="f4-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker><marker id="f4-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker><pattern id="f4-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="none"/><line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" stroke-width="2" opacity="0.45"/></pattern></defs><text class="t-title" x="235" y="57" text-anchor="end">Base weights</text><text class="t-sub" x="235" y="73" text-anchor="end">planner.py WEIGHTS</text><rect class="seg fin" x="250.0" y="40" width="312.0" height="40"/><text class="t-seg" x="406.0" y="65" text-anchor="middle">Financials 40%</text><rect class="seg news" x="562.0" y="40" width="156.0" height="40"/><text class="t-seg" x="640.0" y="65" text-anchor="middle">News 20%</text><rect class="seg mkt" x="718.0" y="40" width="117.0" height="40"/><text class="t-seg" x="776.5" y="65" text-anchor="middle">Market 15%</text><rect class="seg mac" x="835.0" y="40" width="117.0" height="40"/><text class="t-seg" x="893.5" y="65" text-anchor="middle">Macro 15%</text><rect class="seg soc" x="952.0" y="40" width="78.0" height="40"/><text class="t-seg" x="991.0" y="65" text-anchor="middle">Social 10%</text><text class="t-title" x="235" y="177" text-anchor="end">Planned</text><text class="t-sub" x="235" y="193" text-anchor="end">agents that will run</text><rect class="seg fin" x="250.0" y="160" width="346.3" height="40"/><text class="t-seg" x="423.2" y="185" text-anchor="middle">Financials 44.4%</text><rect class="seg news" x="596.3" y="160" width="173.2" height="40"/><text class="t-seg" x="682.9" y="185" text-anchor="middle">News 22.2%</text><rect class="seg mkt" x="769.5" y="160" width="130.3" height="40"/><text class="t-seg" x="834.6" y="185" text-anchor="middle">Market 16.7%</text><rect class="seg mac" x="899.7" y="160" width="130.3" height="40"/><text class="t-seg" x="964.9" y="185" text-anchor="middle">Macro 16.7%</text><text class="t-title" x="235" y="297" text-anchor="end">× confidence</text><text class="t-sub" x="235" y="313" text-anchor="end">each analyst&#x27;s, capped</text><rect class="seg fin" x="250.0" y="280" width="312.0" height="40"/><text class="t-seg" x="406.0" y="305" text-anchor="middle">Financials 40%</text><rect class="seg news" x="562.0" y="280" width="130.3" height="40"/><text class="t-seg" x="627.1" y="305" text-anchor="middle">News 16.7%</text><rect class="seg mkt" x="692.3" y="280" width="110.8" height="40"/><text class="t-seg" x="747.6" y="305" text-anchor="middle">Market 14.2%</text><rect class="seg mac" x="803.0" y="280" width="91.3" height="40"/><text class="t-seg" x="848.6" y="305" text-anchor="middle">Macro 11.7%</text><rect class="hatch" x="894.3" y="280" width="135.7" height="40" fill="url(#f4-hatch)"/><text class="t-sub" x="962.1" y="305" text-anchor="middle">−17.4% (confidence)</text><text class="t-label mono" x="406.0" y="336" text-anchor="middle">0.444 × 0.90</text><text class="t-label mono" x="627.1" y="336" text-anchor="middle">0.222 × 0.75</text><text class="t-label mono" x="747.6" y="336" text-anchor="middle">0.167 × 0.85</text><text class="t-label mono" x="848.6" y="336" text-anchor="middle">0.167 × 0.70</text><text class="t-title" x="235" y="437" text-anchor="end">Effective weights</text><text class="t-sub" x="235" y="453" text-anchor="end">÷ 0.825 → 100% again</text><rect class="seg fin" x="250.0" y="420" width="377.5" height="40"/><text class="t-seg" x="438.8" y="445" text-anchor="middle">Financials 48.4%</text><rect class="seg news" x="627.5" y="420" width="157.6" height="40"/><text class="t-seg" x="706.3" y="445" text-anchor="middle">News 20.2%</text><rect class="seg mkt" x="785.1" y="420" width="134.2" height="40"/><text class="t-seg" x="852.2" y="445" text-anchor="middle">Market 17.2%</text><rect class="seg mac" x="919.2" y="420" width="110.8" height="40"/><text class="t-seg" x="974.6" y="445" text-anchor="middle">Macro 14.2%</text><polyline class="edge accent" points="256,88 256,152" marker-end="url(#f4-a)"/><text class="t-op" x="270" y="124.0" text-anchor="start">Social skipped (no Reddit keys) → divide the other four by 0.90 so they add up to 100%</text><polyline class="edge accent" points="256,208 256,272" marker-end="url(#f4-a)"/><text class="t-op" x="270" y="244.0" text-anchor="start">multiply each by that analyst&#x27;s confidence: Financials 0.90 · News 0.75 · Market 0.85 · Macro 0.70</text><polyline class="edge accent" points="256,344 256,412" marker-end="url(#f4-a)"/><text class="t-op" x="270" y="382.0" text-anchor="start">add up (0.825) and divide by it, so the weights add up to 100% again</text><text class="t-formula mono" x="250" y="490" text-anchor="start">Weighted score = Σ effective weight × analyst score  →  TCS 0.484×6.0 + 0.202×6.0 + 0.172×6.0 + 0.142×5.5 = 5.93</text></svg></div>
+      <figcaption>Same TCS vs Infosys run. If an analyst fails during a run (for example Market data while Gemini is
+        busy), it is left out at the judge and the others are re-balanced the same way. Financials must succeed for any verdict.</figcaption>
+    </figure>
+
+    <div class="cols">
+      <div class="panel">
+        <h3>Worked example: TCS vs Infosys</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Analyst</th><th class="num">Planned</th><th class="num">Confidence</th><th class="num">Effective</th><th class="num">TCS</th><th class="num">Infosys</th></tr></thead>
+            <tbody>
+              <tr><td><i class="dot fin"></i>Financials</td><td class="num">44.4%</td><td class="num">0.90</td><td class="num">48.4%</td><td class="num">6.0</td><td class="num">6.0</td></tr>
+              <tr><td><i class="dot news"></i>News</td><td class="num">22.2%</td><td class="num">0.75</td><td class="num">20.2%</td><td class="num">6.0</td><td class="num">5.5</td></tr>
+              <tr><td><i class="dot mkt"></i>Market data</td><td class="num">16.7%</td><td class="num">0.85</td><td class="num">17.2%</td><td class="num">6.0</td><td class="num">4.0</td></tr>
+              <tr><td><i class="dot mac"></i>Macro &amp; sector</td><td class="num">16.7%</td><td class="num">0.70</td><td class="num">14.2%</td><td class="num">5.5</td><td class="num">6.0</td></tr>
+              <tr class="off"><td><i class="dot soc"></i>Social</td><td class="num">skipped</td><td class="num">—</td><td class="num">0%</td><td class="num">—</td><td class="num">—</td></tr>
+              <tr class="total"><td>Weighted score</td><td class="num">100%</td><td class="num"></td><td class="num">100%</td><td class="num">5.93</td><td class="num">5.55</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Infosys: 0.484×6.0 + 0.202×5.5 + 0.172×4.0 + 0.142×6.0 = 5.55. The 0.38 gap is under 0.5, so no winner is named.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Confidence ceilings (set by code)</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Analyst</th><th class="num">Starts at</th><th>Lowered by</th></tr></thead>
+            <tbody>
+              <tr><td><i class="dot fin"></i>Financials</td><td class="num">100%</td><td>−10% per data warning · −10% if a bank or NBFC is compared · −15% if under 3 years of data (floor 30%)</td></tr>
+              <tr><td><i class="dot news"></i>News</td><td class="num">75%</td><td>headlines only · −10% per company with fewer than 5 headlines (floor 30%)</td></tr>
+              <tr><td><i class="dot mkt"></i>Market data</td><td class="num">85%</td><td>past prices only · −10% if a company lacks 3 years of prices · −10% if benchmark data is missing</td></tr>
+              <tr><td><i class="dot mac"></i>Macro &amp; sector</td><td class="num">70%</td><td>indirect effect · −10% if there is no matching sector index</td></tr>
+              <tr><td><i class="dot soc"></i>Social</td><td class="num">50%</td><td>opinion, not evidence · −10% if a company has fewer than 5 posts</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The confidence used is the lower of the AI's own confidence and this ceiling. In the example, Financials
+          was capped at 90% because Infosys reports in USD (one data warning).</p>
+      </div>
+    </div>
+
+    <ul class="rules">
+      <li>Base weights live in <code>agents/planner.py</code> (<code>WEIGHTS</code>): Financials 40%, News 20%, Market data 15%, Macro 15%, Social 10%. Social is low on purpose: opinion is not evidence.</li>
+      <li>The debate also sees each analyst's weight and confidence, so the bull and bear know Financials is the strongest evidence and News is headline-only.</li>
+      <li>Overall confidence uses the same numbers: the weighted average confidence (82.5% here) × (0.5 + 0.5 × share of planned weight that ran, 100% here) = 82% → High.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Code: <a href="https://github.com/tanishaa7/equitylens-agentic-ai">github.com/tanishaa7/equitylens-agentic-ai</a> ·
+    Numbers from a live run on 10 Nov 2026 · EquityLens is a research prototype, not investment advice.
+  </footer>
+</main>
+
+</body>
+</html>
