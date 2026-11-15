@@ -48,7 +48,7 @@ AGENT_TIMEOUT = 240          # seconds per agent, including its retries
 FATAL_KINDS = {"rate_limit_daily", "config"}   # retrying other agents can't help
 RETRY_KINDS = {"busy", "rate_limit_minute"}   # temporary — worth one more go for Financials
 RETRY_PAUSE = 8              # seconds before re-trying Financials, once the other agents are done
-CACHE_VERSION = 2            # bump when scoring / prompts change, so old results aren't reused
+CACHE_VERSION = 3            # bump when scoring / prompts change, so old results aren't reused
 RESULT_TTL = 24 * 3600       # the key also contains today's IST date → reused for that day only
 LABELS = {"financials": "Financials", "news": "News", "social": "Social",
           "market": "Market data", "macro": "Macro & sector"}

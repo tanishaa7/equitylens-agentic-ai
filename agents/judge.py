@@ -266,14 +266,19 @@ def what_changed(c: dict) -> list[str]:
     q = (c.get("ratios") or {}).get("latest_quarter")
     if not q or not q["current"]:
         return []
-    lines = [f"{q['current']['period']}: revenue {_signed_pct(q['revenue_yoy'])} vs a year ago, "
+    if "same_quarter_last_year" in q and q["same_quarter_last_year"] is None:   # missing in source
+        yoy = lambda v: "year-ago quarter not in our data"
+    else:
+        yoy = lambda v: f"{_signed_pct(v)} vs a year ago"
+    lines = [f"{q['current']['period']}: revenue {yoy(q['revenue_yoy'])}, "
              f"{_signed_pct(q['revenue_qoq'])} vs the previous quarter",
-             f"Net profit {_signed_pct(q['net_income_yoy'])} vs a year ago, "
+             f"Net profit {yoy(q['net_income_yoy'])}, "
              f"{_signed_pct(q['net_income_qoq'])} vs the previous quarter"]
     pts = q["ebitda_margin_change_qoq_pts"]
     if pts is not None and "ebitda_margin" not in c["ratios"]["not_applicable"]:
         lines.append(f"EBITDA margin {pts:+.1f} pts vs the previous quarter")
-    stale = [w for w in c["ratios"]["data_warnings"] if w.startswith("Latest quarter on file")]
+    stale = [w for w in c["ratios"]["data_warnings"]
+             if w.startswith(("Latest quarter on file", "Our data source (Yahoo Finance) does not have"))]
     return lines + stale
 
 

@@ -14,6 +14,7 @@ from data.ratios import FORMULAS
 
 from agents.common import FactSheet, run_specialist
 from agents.schemas import AgentReport
+from agents.sector_notes import sector_note
 
 SYSTEM = """You are the Financials analyst in EquityLens, a research tool that compares 2–3 \
 Indian listed companies in the same sector. You judge ONLY the reported financial statements \
@@ -36,6 +37,15 @@ new numbers such as differences, averages or percentages of change.
 - Metrics marked "not applicable" (banks, insurers, NBFCs) must not count against a company. \
 Compare such companies on ROE, net margin, growth and valuation.
 - Data warnings are reasons for caution: mention them in red_flags or data_gaps and lower confidence.
+- A quarter missing from the data is a gap in our data source, not proof the company hasn't \
+published it. Never say results are "not available", "not published" or "not out" — say they \
+are not in our data.
+- All statements are consolidated (whole group, including subsidiaries). Say "consolidated" \
+when it matters (e.g. receivables or debt that may sit in a subsidiary). Standalone figures \
+are not in this data.
+- "Sector norms" describe what is ordinary for the industry. Use them to avoid flagging normal \
+features as problems (e.g. a sector that normally carries receivables). They are background, \
+not evidence: never cite them as a source.
 - Score 0–10 on this lens only, relative to the peers here; 5 = in line with peers. Spread the \
 scores when the numbers clearly differ; keep them close when they don't.
 - This is research, not advice: never say buy, sell, invest, accumulate or avoid.
@@ -72,6 +82,7 @@ METRICS = [
     ("interest_coverage", "Interest coverage", _x),
     ("free_cash_flow", "Free cash flow", fmt_cr),
     ("cash_conversion", "Cash conversion (OCF / net profit)", _r2),
+    ("receivables", "Receivables at year-end", fmt_cr),
     ("receivable_days", "Receivable days", _days),
 ]
 
@@ -88,9 +99,9 @@ def _add_company(sheet: FactSheet, c: dict) -> list[str]:
     span = f"{years[0]['period']}–{years[-1]['period']}" if years else "n/a"
 
     for key, label, f in METRICS:
-        if key in r["not_applicable"] or all(y[key] is None for y in years):
+        if key in r["not_applicable"] or all(y.get(key) is None for y in years):
             continue
-        series = " → ".join(f"{y['period']} {_fmt(y[key], f)}" for y in years)
+        series = " → ".join(f"{y['period']} {_fmt(y.get(key), f)}" for y in years)
         formula = f" · {label} = {FORMULAS[key]}" if key in FORMULAS else ""
         sheet.add(t, f"{label}: {series}", f"{provider} annual statements ({span}){formula}")
 
@@ -119,17 +130,26 @@ def _add_company(sheet: FactSheet, c: dict) -> list[str]:
         margin = ("" if "ebitda_margin" in r["not_applicable"] or cur["ebitda_margin"] is None
                   else f"; EBITDA margin {fmt_pct(cur['ebitda_margin'])}"
                        + ("" if pts is None else f" ({pts:+.1f} pts vs previous quarter)"))
+        no_yoy = q["same_quarter_last_year"] is None
+        yoy = lambda v: "same quarter last year not in our data" if no_yoy else fmt_pct(v)
         sheet.add(t, f"Latest quarter {cur['period']}: revenue {fmt_cr(cur['revenue'])} "
-                     f"(QoQ {fmt_pct(q['revenue_qoq'])}, YoY {fmt_pct(q['revenue_yoy'])}); "
+                     f"(QoQ {fmt_pct(q['revenue_qoq'])}, YoY {yoy(q['revenue_yoy'])}); "
                      f"net profit {fmt_cr(cur['net_income'])} "
-                     f"(QoQ {fmt_pct(q['net_income_qoq'])}, YoY {fmt_pct(q['net_income_yoy'])})"
+                     f"(QoQ {fmt_pct(q['net_income_qoq'])}, YoY {yoy(q['net_income_yoy'])})"
                      + margin,
                   f"{provider} quarterly statements")
+
+    cov = r.get("coverage")
+    if cov:
+        sheet.add(t, coverage_text(cov), f"{provider} · EquityLens coverage check")
 
     for w in r["data_warnings"]:
         sheet.add(t, f"Data warning: {w}", "EquityLens data checks")
 
     header = [f"== {t} — {m['name']} ({m.get('industry') or 'industry unknown'})"]
+    if cov and cov.get("fy_end_month") == 12:
+        header.append("Financial year ends in December: annual periods are calendar years and "
+                      "quarters are labelled Q1–Q4 CY (e.g. Q3 CY26 = Jul–Sep 2026).")
     if r["is_financial"]:
         labels = {k: lbl for k, lbl, _ in METRICS} | {"ev_ebitda": "EV/EBITDA"}
         header.append("Financial company: "
@@ -137,6 +157,29 @@ def _add_company(sheet: FactSheet, c: dict) -> list[str]:
                       + " are not applicable. Bank metrics such as NIM, GNPA and CASA are "
                         "not available in this data.")
     return header
+
+
+def coverage_text(cov: dict) -> str:
+    """One line on which periods we have and what's missing."""
+    parts = [f"Data coverage ({cov.get('basis', 'consolidated')} statements): annual "
+             + (", ".join(cov["annual_periods"]) or "none")
+             + "; quarters " + (", ".join(cov["quarters_on_file"]) or "none")]
+    if cov["missing_quarters"]:
+        parts.append("missing from source: " + ", ".join(cov["missing_quarters"]))
+    if cov["not_in_source_yet"]:
+        parts.append("past the filing deadline but not in our source yet: "
+                     + ", ".join(cov["not_in_source_yet"]))
+    if cov.get("pending_note"):
+        parts.append(cov["pending_note"])
+    return "; ".join(parts)
+
+
+def _sector_block(companies: list[dict]) -> str:
+    notes = dict.fromkeys(filter(None, (sector_note(c["market"].get("industry"),
+                                                    c["market"].get("sector"))
+                                        for c in companies)))
+    return "" if not notes else "Sector norms (background, not evidence):\n" + "\n".join(
+        f"- {n}" for n in notes) + "\n\n"
 
 
 def build_prompt(companies: list[dict], macro: dict | None = None) -> tuple[FactSheet, str]:
@@ -149,7 +192,9 @@ def build_prompt(companies: list[dict], macro: dict | None = None) -> tuple[Fact
     prompt = (
         f"Compare the financial strength of: {names}.\n"
         "All money is in Indian rupees; ₹ cr = crore. FY26 = fiscal year April 2025 – March 2026. "
+        "All statements are consolidated. "
         "'n/a' = not available. '—' = could not be calculated.\n\n"
+        + _sector_block(companies)
         + "\n\n".join(blocks)
         + "\n\nReturn one assessment per company, using the tickers exactly as written above."
     )

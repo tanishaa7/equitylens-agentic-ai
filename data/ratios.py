@@ -6,9 +6,11 @@ Every ratio has its formula listed in FORMULAS so the report can cite it.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
-from data.common import cagr, safe_div
+import pandas as pd
+
+from data.common import cagr, quarter_ends_between, quarter_label, safe_div
 
 FORMULAS = {
     "ebitda_margin": "EBITDA / Revenue",
@@ -20,6 +22,7 @@ FORMULAS = {
     "interest_coverage": "EBIT / Interest expense",
     "free_cash_flow": "Operating cash flow + Capital expenditure (capex is negative)",
     "cash_conversion": "Operating cash flow / Net income",
+    "receivables": "Trade receivables on the year-end balance sheet",
     "receivable_days": "Receivables / Revenue × 365",
     "revenue_growth": "Revenue this year / last year − 1",
     "profit_growth": "Net income this year / last year − 1",
@@ -60,6 +63,7 @@ def _year_ratios(cur: dict, prev: dict | None) -> dict:
         "interest_coverage": safe_div(ebit, cur["interest_expense"]),
         "free_cash_flow": fcf,
         "cash_conversion": safe_div(ocf, ni),
+        "receivables": cur["receivables"],
         "receivable_days": (None if safe_div(cur["receivables"], rev) is None
                             else cur["receivables"] / rev * 365),
         "revenue_growth": (safe_div(rev, prev["revenue"]) - 1
@@ -124,7 +128,8 @@ def _latest_quarter(quarterly: list[dict]) -> dict | None:
 # Ratios that mean nothing for banks/NBFCs/insurers (deposits are not "debt",
 # cash flow is driven by lending, there is no EBITDA).
 NOT_FOR_FINANCIALS = ["ebitda_margin", "roce", "debt_to_equity", "interest_coverage",
-                      "free_cash_flow", "cash_conversion", "receivable_days", "ev_ebitda"]
+                      "free_cash_flow", "cash_conversion", "receivables", "receivable_days",
+                      "ev_ebitda"]
 FINANCIAL_KEYWORDS = ("bank", "insurance", "credit services", "capital markets",
                       "asset management", "mortgage", "financial conglomerates")
 
@@ -134,26 +139,94 @@ def is_financial(market: dict) -> bool:
     return any(k in industry for k in FINANCIAL_KEYWORDS)
 
 
+# SEBI LODR Reg. 33: quarterly results within 45 days of the quarter end,
+# results for the last quarter of the year (with the audited annual) within 60.
+QUARTER_DEADLINE_DAYS, YEAR_END_DEADLINE_DAYS = 45, 60
+
+
+def results_deadline(quarter_end: date, fy_end_month: int = 3) -> date:
+    days = YEAR_END_DEADLINE_DAYS if quarter_end.month == fy_end_month else QUARTER_DEADLINE_DAYS
+    return quarter_end + timedelta(days=days)
+
+
+def _last_quarter_end(today: date) -> date:
+    ts = (pd.Timestamp(today) - pd.offsets.QuarterEnd(1)) if not pd.Timestamp(today).is_quarter_end \
+        else pd.Timestamp(today)
+    return ts.date()
+
+
+def coverage(fin: dict, today: date | None = None) -> dict:
+    """Which periods we have, which are missing, and whether the newest results
+    that should be public by now are in the data."""
+    today = today or date.today()
+    fy_end = fin.get("fy_end_month") or 3
+    label = lambda d: quarter_label(pd.Timestamp(d), fy_end)
+    ends = sorted({date.fromisoformat(r["period_end"]) for r in fin["quarterly"]}, reverse=True)
+
+    gaps = []
+    if len(ends) > 1:
+        have = set(ends)
+        gaps = [label(e) for e in quarter_ends_between(pd.Timestamp(ends[0]), pd.Timestamp(ends[-1]))
+                if e.date() not in have]
+
+    # Newest quarter whose results deadline has passed, and one still inside its window.
+    last_end = _last_quarter_end(today)
+    due = pending = None
+    for e in quarter_ends_between(pd.Timestamp(last_end), pd.Timestamp(last_end) - pd.DateOffset(months=9)):
+        d = e.date()
+        if results_deadline(d, fy_end) < today:
+            due = d
+            break
+        if pending is None:
+            pending = d
+    newest = ends[0] if ends else None
+    behind = []
+    if due and (newest is None or newest < due):
+        start = pd.Timestamp(newest) + pd.offsets.QuarterEnd(1) if newest else pd.Timestamp(due)
+        behind = [label(e) for e in reversed(quarter_ends_between(pd.Timestamp(due), start))]
+    pending_note = None
+    if pending and (newest is None or newest < pending):
+        pending_note = (f"{label(pending)} results may not be published yet "
+                        f"(deadline {results_deadline(pending, fy_end):%d %b %Y}).")
+
+    return {
+        "basis": fin.get("basis", "consolidated"),
+        "fy_end_month": fy_end,
+        "annual_periods": [r["period"] for r in fin["annual"] if r["revenue"] is not None],
+        "quarters_on_file": [label(e) for e in ends],
+        "missing_quarters": gaps,
+        "latest_due_quarter": label(due) if due else None,
+        "latest_due_deadline": results_deadline(due, fy_end).isoformat() if due else None,
+        "not_in_source_yet": behind,     # deadline passed, source doesn't have them
+        "pending_note": pending_note,    # deadline not passed yet — not a problem
+    }
+
+
 def _relative_gap(a, b):
     if a is None or b is None or b == 0:
         return None
     return abs(a / b - 1)
 
 
-def _data_warnings(fin, market, by_year, valuation, latest_q) -> list[str]:
+def _data_warnings(fin, market, by_year, valuation, latest_q, cov, today) -> list[str]:
     warnings = []
-    today = date.today()
     if fin["annual"]:
         age = (today - date.fromisoformat(fin["annual"][0]["period_end"])).days
         if age > 450:
             warnings.append(f"Latest annual data is {fin['annual'][0]['period']} "
                             f"({age} days old) — newer results may be missing.")
-    if latest_q and latest_q["current"]:
-        q = next(r for r in fin["quarterly"] if r["period"] == latest_q["current"]["period"])
-        age = (today - date.fromisoformat(q["period_end"])).days
-        if age > 200:
-            warnings.append(f"Latest quarter on file is {q['period']} ({age} days old) — "
-                            "'what changed' may be stale.")
+    if cov["not_in_source_yet"]:
+        q = cov["not_in_source_yet"]
+        newest = cov["quarters_on_file"][0] if cov["quarters_on_file"] else "none"
+        warnings.append(
+            f"Our data source (Yahoo Finance) does not have {', '.join(q)} results yet, although "
+            f"the filing deadline has passed — the company has most likely published them on "
+            f"NSE/BSE. Newest quarter in our data: {newest}.")
+    if cov["missing_quarters"]:
+        warnings.append(
+            f"Quarter(s) missing from the data source: {', '.join(cov['missing_quarters'])}. "
+            "Comparisons that need them (same quarter last year, last-12-months totals) "
+            "are not available — this is a data gap, not a sign the results were not published.")
     gap = _relative_gap(valuation["pe"], market.get("yahoo_trailing_pe"))
     if gap is not None and gap > 0.15:
         warnings.append(f"Our P/E ({valuation['pe']:.1f}) differs from Yahoo's "
@@ -211,6 +284,8 @@ def compute_ratios(fin: dict, market: dict) -> dict:
         "ev_ebitda": None if financial else safe_div(ev, latest and latest["ebitda"]),
     }
     latest_q = _latest_quarter(fin["quarterly"])
+    today = date.today()
+    cov = coverage(fin, today)
 
     return {
         "ticker": fin["ticker"],
@@ -220,7 +295,8 @@ def compute_ratios(fin: dict, market: dict) -> dict:
         "growth": growth,
         "valuation": valuation,
         "latest_quarter": latest_q,
-        "data_warnings": _data_warnings(fin, market, by_year, valuation, latest_q),
+        "coverage": cov,
+        "data_warnings": _data_warnings(fin, market, by_year, valuation, latest_q, cov, today),
         "formulas": FORMULAS,
         "source": fin["source"],
     }

@@ -65,6 +65,13 @@ REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID", "")
 REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET", "")
 REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT", "equitylens-prototype/0.1")
 
+# --- NSE filings (collected every few hours by .github/workflows/collect-filings.yml) ---
+# Read from the repo's `data` branch; set EQUITYLENS_FILINGS_DIR to a local folder instead.
+FILINGS_BASE_URL = os.getenv(
+    "FILINGS_BASE_URL",
+    "https://raw.githubusercontent.com/tanishaa7/equitylens-agentic-ai/data/filings/nse")
+FILINGS_DIR = os.getenv("EQUITYLENS_FILINGS_DIR", "")
+
 # --- Paths ---
 CACHE_DIR = ROOT / "cache"
 CACHE_DIR.mkdir(exist_ok=True)

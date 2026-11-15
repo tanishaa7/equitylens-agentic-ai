@@ -1,0 +1,58 @@
+# Every 3 hours: read NSE's official RSS feeds and add new filings to the
+# per-company history on the `data` branch (filings/nse/...). The app reads it
+# from there (config.FILINGS_BASE_URL). Kept off `main` so the app isn't
+# redeployed on every run and main's history stays clean.
+name: Collect NSE filings
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"      # every 3 hours, at :17 (UTC)
+  workflow_dispatch:             # "Run workflow" button for a manual run
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-filings
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the two libraries the collector needs
+        run: pip install requests==2.34.2 feedparser==6.0.14
+
+      - name: Check out the data branch (create it on the first run)
+        run: |
+          git config user.name "equitylens-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin data >/dev/null; then
+            git fetch --depth=1 origin data
+            git worktree add -B data store origin/data
+          else
+            git worktree add --orphan -b data store
+          fi
+
+      - name: Collect
+        run: python scripts/collect_nse_filings.py --out store/filings
+
+      - name: Save
+        working-directory: store
+        run: |
+          git add -A filings
+          if git diff --cached --quiet; then
+            echo "Nothing new."
+          else
+            git -c user.name="equitylens-bot" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -q -m "Filings $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push origin data
+          fi
