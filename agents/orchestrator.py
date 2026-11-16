@@ -88,13 +88,14 @@ def _emit(on_event: EventFn | None, stage: str, detail: str = ""):
 async def _fetch_data(plan: Plan, on_event) -> tuple[list[dict], dict | None]:
     parts = frozenset(plan.data_parts)
 
-    async def one(ticker: str) -> dict:
-        c = await asyncio.to_thread(collect_company, ticker, parts)
-        _emit(on_event, "data", f"{ticker} ready")
+    async def one(co) -> dict:
+        profile = {"name": co.name, "sector": co.sector, "industry": co.industry}
+        c = await asyncio.to_thread(collect_company, co.ticker, parts, profile)
+        _emit(on_event, "data", f"{co.ticker} ready")
         return c
 
     first = plan.companies[0]
-    jobs = [one(c.ticker) for c in plan.companies]
+    jobs = [one(c) for c in plan.companies]
     if plan.needs_macro:
         jobs.append(asyncio.to_thread(macro_for, first.sector, first.industry))
     results = await asyncio.gather(*jobs)

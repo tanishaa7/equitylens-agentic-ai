@@ -46,9 +46,10 @@ def _ok_status(v: dict) -> bool:
     return str(v.get("status", "")).startswith("ok")
 
 
-def collect_company(ticker: str, parts=ALL_PARTS) -> dict:
-    """Market data always; financials/ratios, news and Reddit only if asked for."""
-    market = cached_call("market", ticker, TTL["market"], get_market_data, ticker,
+def collect_company(ticker: str, parts=ALL_PARTS, profile: dict | None = None) -> dict:
+    """Market data always; financials/ratios, news and Reddit only if asked for.
+    `profile` (name/sector/industry from the planner) covers Yahoo's details call failing."""
+    market = cached_call("market", ticker, TTL["market"], get_market_data, ticker, profile,
                          ok=lambda v: v["found"])
     if not market["found"]:
         return {"ticker": ticker, "error": "Ticker not found on Yahoo Finance"}
