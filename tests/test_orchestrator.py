@@ -89,7 +89,7 @@ def setup(behaviours: dict, plan_ok=True, data_fails=False, debate="ok", judge="
     orch.run_judge = fake_judge
     orch.make_plan = lambda inputs, allow: plan(plan_ok)
 
-    def collect(ticker, parts):
+    def collect(ticker, parts, profile=None):
         if data_fails:
             raise ConnectionError("no network")
         fetched.append(ticker)

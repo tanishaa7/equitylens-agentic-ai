@@ -36,11 +36,34 @@ def yahoo_info(t: "yf.Ticker") -> dict:
     return {}
 
 
-def get_market_data(ticker: str) -> dict:
+def _fast_info(t: "yf.Ticker") -> dict:
+    """Price, market cap and 52-week range from Yahoo's chart endpoint, which keeps working
+    when the company-details endpoint refuses cloud servers."""
+    try:
+        f = t.fast_info
+        return {"currentPrice": f.get("lastPrice"), "marketCap": f.get("marketCap"),
+                "fiftyTwoWeekHigh": f.get("yearHigh"), "fiftyTwoWeekLow": f.get("yearLow"),
+                "currency": f.get("currency")}
+    except Exception:
+        return {}
+
+
+def get_market_data(ticker: str, profile: dict | None = None) -> dict:
+    """`profile` (name, sector, industry from the company lookup) is used when Yahoo's
+    company-details call fails, as it often does from shared cloud servers."""
     t = yf.Ticker(ticker)
-    info = yahoo_info(t)
+    try:
+        info = yahoo_info(t)
+    except Exception:
+        info = {}
     hist = t.history(period="3y", auto_adjust=True)
     close = hist["Close"] if not hist.empty else None
+    details_from = "yahoo"
+    if not (info.get("longName") or info.get("shortName")) and profile and profile.get("name") \
+            and close is not None:
+        info = {**_fast_info(t), "longName": profile["name"], "sector": profile.get("sector"),
+                "industry": profile.get("industry")}
+        details_from = "lookup"
 
     volatility_1y = max_drawdown_1y = None
     if close is not None and len(close) > 30:
@@ -70,6 +93,7 @@ def get_market_data(ticker: str) -> dict:
         "max_drawdown_1y": max_drawdown_1y,
         "yahoo_trailing_pe": clean(info.get("trailingPE")),  # cross-checks only
         "yahoo_roe": clean(info.get("returnOnEquity")),
+        "details_from": details_from,    # "lookup": Yahoo's details call failed; prices still Yahoo
         "source": {
             "provider": "Yahoo Finance (yfinance)",
             "url": f"https://finance.yahoo.com/quote/{ticker}",

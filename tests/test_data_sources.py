@@ -266,6 +266,38 @@ def test_receivables_trend_and_benchmark():
     print("[ok] receivables shown with last year and the change; non-bank financials vs Nifty Financial Services")
 
 
+def test_market_data_when_yahoo_details_refused():
+    """Streamlit Cloud: Yahoo's company-details call is refused, prices still work."""
+    import data.market as m
+
+    class FakeTicker:
+        def __init__(self, t):
+            self.fast_info = {"lastPrice": 110.0, "marketCap": 5e11, "yearHigh": 120.0,
+                              "yearLow": 80.0, "currency": "INR"}
+
+        @property
+        def info(self):
+            raise RuntimeError("401 Invalid Crumb")
+
+        def history(self, period, auto_adjust):
+            idx = pd.date_range(end="2026-11-13", periods=400, freq="B")
+            return pd.DataFrame({"Close": [100.0] * 399 + [110.0]}, index=idx)
+
+    real, waits = m.yf.Ticker, m.YAHOO_RETRY_WAITS
+    m.yf.Ticker, m.YAHOO_RETRY_WAITS = FakeTicker, (0, 0)
+    try:
+        r = m.get_market_data("TITAN.NS", {"name": "Titan Company", "sector": "Consumer Cyclical",
+                                           "industry": "Luxury Goods"})
+        bare = m.get_market_data("TITAN.NS")
+    finally:
+        m.yf.Ticker, m.YAHOO_RETRY_WAITS = real, waits
+    assert r["found"] and r["name"] == "Titan Company" and r["industry"] == "Luxury Goods"
+    assert r["price"] == 110.0 and r["market_cap"] == 5e11 and r["details_from"] == "lookup"
+    assert r["returns"]["1y"] is not None
+    assert not bare["found"]                       # without the lookup's details: still "not found"
+    print("[ok] market data: Yahoo details refused → name/sector from lookup, prices from chart data")
+
+
 def main():
     test_quarter_labels()
     test_coverage_and_deadlines()
@@ -277,6 +309,7 @@ def main():
     test_results_filed_on_nse()
     test_quoted_source_headlines()
     test_receivables_trend_and_benchmark()
+    test_market_data_when_yahoo_details_refused()
     print("\nAll data-source tests passed.")
 
 
