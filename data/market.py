@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pandas as pd
 import yfinance as yf
 
@@ -18,9 +20,25 @@ def clean_company_name(name: str | None) -> str | None:
     return name.strip()
 
 
+YAHOO_RETRY_WAITS = (2, 5)    # seconds; shared cloud servers get short rate limits from Yahoo
+
+
+def yahoo_info(t: "yf.Ticker") -> dict:
+    """Ticker.info with a couple of short retries. Raises the last error if Yahoo keeps
+    refusing; returns Yahoo's (possibly near-empty) answer otherwise."""
+    for wait in (*YAHOO_RETRY_WAITS, None):
+        try:
+            return t.info or {}
+        except Exception:
+            if wait is None:
+                raise
+            time.sleep(wait)
+    return {}
+
+
 def get_market_data(ticker: str) -> dict:
     t = yf.Ticker(ticker)
-    info = t.info or {}
+    info = yahoo_info(t)
     hist = t.history(period="3y", auto_adjust=True)
     close = hist["Close"] if not hist.empty else None
 

@@ -24,6 +24,7 @@ from pydantic import BaseModel
 import config
 from agents.registry import SPECIALISTS
 from data import lookup
+from data.common import normalize_ticker
 from data.ratios import is_financial
 
 # How much each lens counts in the final score (the judge uses these in Step 8).
@@ -92,11 +93,16 @@ def resolve(raw: str) -> Company | InputProblem:
         return InputProblem(input=raw, kind="unavailable",
                             message=f"Couldn't reach Yahoo Finance to look up “{text}” right now. "
                                     "Please try again in a minute.")
-    exact = [c for c in found if c["exact"]]
+    typed = normalize_ticker(text) if _SYMBOL_RE.fullmatch(text) else None
+    exact = [c for c in found if c["exact"] or c["ticker"] == typed]
     if len(exact) == 1:
         p = lookup.lookup_symbol(exact[0]["ticker"])
         if p:
             return _company(raw, p)
+        if exact[0].get("sector"):
+            # Yahoo's details call failed (often a rate limit on shared servers) but its
+            # search knows this company — use that rather than asking the user to pick it.
+            return _company(raw, {**exact[0], "market_cap": None})
     options = (exact or found)[:4]
     if options:
         cands = [Candidate(ticker=c["ticker"], name=c["name"], industry=c["industry"]) for c in options]
