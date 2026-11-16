@@ -233,7 +233,10 @@ def head_to_head_tab(run: ComparisonRun):
     v = run.verdict
     names = {c.ticker: short(c.name, c.ticker) for c in run.plan.companies}
     st.markdown("Computed by code from the statements — **the AI doesn't do the maths.** "
-                "Edge = clearly better value (ties within 5% get none).")
+                "Edge = clearly better value (ties within 5% get none).  \n"
+                "<small>📒 All figures are **consolidated** (whole group, including subsidiaries), "
+                "from Yahoo Finance. Standalone figures aren't available from this source yet.</small>",
+                unsafe_allow_html=True)
     edges = " · ".join(f"**{lens}:** {md(names.get(t, 'split'))}" for lens, t in v.lens_edges.items())
     st.markdown(f"<small>{edges}</small>", unsafe_allow_html=True)
 
@@ -256,6 +259,7 @@ def head_to_head_tab(run: ComparisonRun):
     with st.expander("Formulas and sources"):
         for r in v.lens_table:
             st.markdown(f"<small>**{r.metric}** — {md(r.source)}</small>", unsafe_allow_html=True)
+    coverage_section(run, names)
 
     st.markdown("**Analyst scores** (0–10, 5 = in line with peers)")
     srows = []
@@ -265,6 +269,51 @@ def head_to_head_tab(run: ComparisonRun):
         srows.append(row)
     if srows:
         st.dataframe(pd.DataFrame(srows), hide_index=True, width="stretch")
+
+
+def coverage_section(run: ComparisonRun, names: dict[str, str]):
+    """Which years and quarters each company's numbers are based on, and what's missing."""
+    rows, notes = [], []
+    for c in run.companies:
+        cov = (c.get("ratios") or {}).get("coverage")
+        if not cov:
+            continue
+        name = names.get(c["ticker"], c["ticker"])
+        filed = cov.get("filed_not_in_source") or []
+        missing = list(dict.fromkeys(cov["missing_quarters"] + cov["not_in_source_yet"]
+                                     + [f["quarter"] for f in reversed(filed)]))
+        rows.append({
+            "Company": name,
+            "Basis": cov.get("basis", "consolidated").title(),
+            "Year ends": "December" if cov.get("fy_end_month") == 12 else (
+                "March" if cov.get("fy_end_month", 3) == 3 else f"month {cov['fy_end_month']}"),
+            "Annual": ", ".join(cov["annual_periods"]) or "—",
+            "Quarters on file": ", ".join(cov["quarters_on_file"]) or "—",
+            "Missing": ", ".join(missing) or "none",
+        })
+        for f in filed:
+            link = f" — [official filing]({f['link']})" if f.get("link") else ""
+            notes.append(f"**{md(name)}:** {f['quarter']} results were announced on NSE "
+                         f"({f['filed']}) but aren't in Yahoo Finance yet, so this comparison "
+                         f"doesn't include them{link}.")
+        late = [q for q in cov["not_in_source_yet"] if q not in {f["quarter"] for f in filed}]
+        if late:
+            notes.append(f"**{md(name)}:** {', '.join(late)} results are past "
+                         f"the filing deadline but not in Yahoo Finance yet — check NSE/BSE.")
+        if cov.get("pending_note"):
+            notes.append(f"**{md(name)}:** {md(cov['pending_note'])}")
+    if not rows:
+        return
+    gaps = any(r["Missing"] != "none" for r in rows)
+    with st.expander("📅 Data coverage" + (" — some periods missing" if gaps else ""), expanded=gaps):
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        for n in notes:
+            st.markdown(f"<small>{n}</small>", unsafe_allow_html=True)
+        st.caption("Missing = not in our data source. It doesn't mean the company hasn't "
+                   "published those results.")
+
+
+FEED_TAGS = {"press": "📰 business press", "governance": "🏛️ leadership & governance"}
 
 
 def debate_tab(run: ComparisonRun):
@@ -344,10 +393,29 @@ def context_tab(run: ComparisonRun):
     for col, c in zip(cols, run.companies):
         with col:
             st.markdown(f"**News · {md(c['market']['name'])}**")
-            for a in (c.get("news") or {}).get("articles", [])[:10]:
+            arts = (c.get("news") or {}).get("articles", [])
+            gov = [a for a in arts if "governance" in (a.get("feeds") or [])][:4]
+            shown = gov + [a for a in arts if a not in gov][:10 - len(gov)]
+            shown.sort(key=lambda a: a.get("published") or "", reverse=True)
+            for a in shown:
                 day = (a.get("published") or "")[:10]
-                st.markdown(f"<small>{day} · {md(a.get('publisher'))}</small><br>"
+                tags = " · ".join(FEED_TAGS[f] for f in (a.get("feeds") or []) if f in FEED_TAGS)
+                st.markdown(f"<small>{day} · {md(a.get('publisher'))}"
+                            + (f" · {tags}" if tags else "") + "</small><br>"
                             f"[{md(a['title'])}]({a['link']})", unsafe_allow_html=True)
+            filings = c.get("filings") or {}
+            if str(filings.get("status", "")).startswith("ok"):
+                since = (filings.get("history_starts") or "")[:10]
+                st.markdown(f"**NSE filings** <small>(last {filings.get('days', 90)} days"
+                            + (f"; history from {since}" if since else "") + ")</small>",
+                            unsafe_allow_html=True)
+                for f in filings.get("items", [])[:8]:
+                    day = (f.get("published") or "")[:10]
+                    text = f.get("detail") if f.get("kind") == "announcement" else f.get("subject")
+                    st.markdown(f"<small>{day} · {md(text)}</small> "
+                                f"[filing]({f.get('link')})", unsafe_allow_html=True)
+                if not filings.get("items"):
+                    st.caption("No filings collected for this company yet.")
             for w in (c.get("ratios") or {}).get("data_warnings", []):
                 st.caption(f"Data note: {md(w)}")
     if m.get("policy_headlines"):
@@ -430,8 +498,9 @@ def main():
 
     st.divider()
     st.caption("EquityLens is a research prototype. It compares companies using public data "
-               "(Yahoo Finance, Google News); it does not predict share prices and is not "
-               "investment advice. Figures may be incomplete — check the cited sources.")
+               "(Yahoo Finance consolidated statements, Google News incl. Indian business press, "
+               "NSE filings); it does not predict share prices and is not investment advice. "
+               "Figures may be incomplete — check the cited sources.")
 
 
 main()

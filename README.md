@@ -7,7 +7,7 @@ not investment advice.
 **Live demo:** _add your `*.streamlit.app` link here after deploying (see "Deploy")._
 
 > ⚠️ Research prototype. It compares companies using free public data (Yahoo Finance,
-> Google News) and a free AI model. Figures can be incomplete or wrong — check the cited
+> Google News, NSE filings) and a free AI model. Figures can be incomplete or wrong — check the cited
 > sources. It does not predict prices and is not investment advice or a SEBI-registered
 > research service.
 
@@ -16,6 +16,18 @@ not investment advice.
 User input → Planner → 5 specialist agents in parallel (Financials, News,
 Social, Market data, Macro) → Bull vs bear debate → Father agent (judge)
 → Comparison report.
+
+## Data sources
+
+| Source | What we use | Notes |
+|---|---|---|
+| Yahoo Finance | Prices, valuation, annual + quarterly statements | **Consolidated** figures; can lag new results by days, and some quarters are missing (shown in the app's *Data coverage* table) |
+| Google News (India) | Headlines from all outlets, a second pass limited to ET / Business Standard / Mint / Moneycontrol / FE / BusinessLine, and a leadership & governance search | Headlines and links only — article text is never fetched |
+| NSE official RSS feeds | Company announcements, board meetings, corporate actions (last 90 days) | NSE's feeds only hold about a day, so `.github/workflows/collect-filings.yml` collects them every 3 hours into the `data` branch; history starts on the day collection began |
+
+Financials refresh every 2 hours during results season (mid-Jan–Feb, mid-Apr–May, mid-Jul–Aug,
+mid-Oct–Nov) and every 12 hours otherwise. Quarters past SEBI's 45/60-day filing deadline that
+Yahoo doesn't have yet are flagged as "not in our source yet", never as "not published".
 
 ## Team guide (diagrams)
 

@@ -51,13 +51,33 @@ def fy_label(ts: pd.Timestamp) -> str:
     return ts.strftime("%b %Y")
 
 
-def quarter_label(ts: pd.Timestamp) -> str:
-    """Indian fiscal quarter: Sep 2026 -> 'Q2 FY27'."""
-    q = {6: 1, 9: 2, 12: 3, 3: 4}.get(ts.month)
-    if q is None:
-        return ts.strftime("%b %Y")
-    fy = ts.year + 1 if ts.month > 3 else ts.year
-    return f"Q{q} FY{str(fy)[-2:]}"
+def quarter_label(ts: pd.Timestamp, fy_end_month: int = 3) -> str:
+    """Quarter of the company's own financial year.
+
+    March year-end (most Indian companies): Sep 2026 -> 'Q2 FY27'.
+    December year-end (e.g. CRISIL):        Sep 2026 -> 'Q3 CY26'.
+    Any other year-end:                      'Q2 FY27 (Jun year-end)'.
+    """
+    offset = (ts.month - fy_end_month) % 12          # months after the year-end
+    if offset % 3:
+        return ts.strftime("%b %Y")                  # not a quarter end
+    q = 4 if offset == 0 else offset // 3
+    fy = ts.year if ts.month <= fy_end_month else ts.year + 1
+    yy = str(fy)[-2:]
+    if fy_end_month == 3:
+        return f"Q{q} FY{yy}"
+    if fy_end_month == 12:
+        return f"Q{q} CY{yy}"
+    return f"Q{q} FY{yy} ({pd.Timestamp(2000, fy_end_month, 1).strftime('%b')} year-end)"
+
+
+def quarter_ends_between(newest: pd.Timestamp, oldest: pd.Timestamp) -> list[pd.Timestamp]:
+    """Every calendar quarter-end from newest back to oldest (inclusive)."""
+    out, ts = [], newest
+    while ts >= oldest:
+        out.append(ts)
+        ts = (ts - pd.DateOffset(months=3)) + pd.offsets.MonthEnd(0)
+    return out
 
 
 def now_iso() -> str:

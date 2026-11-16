@@ -26,6 +26,7 @@ from agents.common import FactSheet, advice_words, match_ticker, unmatched_numbe
 from agents.llm import AIUnavailable, generate
 from agents.planner import Plan
 from agents.schemas import AgentReport
+from agents.sector_notes import sector_note
 
 log = logging.getLogger("equitylens.debate")
 
@@ -163,8 +164,11 @@ def build_brief(plan: Plan, reports: list[AgentReport]) -> tuple[FactSheet, str]
             lines.append(f"[{fid}] data gap: {g}")
 
     names = ", ".join(f"{c.ticker} ({c.name})" for c in plan.companies)
+    note = sector_note(plan.companies[0].industry, plan.companies[0].sector)
     brief = (f"Companies: {names}.\nSector: {plan.companies[0].sector} / "
-             f"{plan.companies[0].industry}.\n" + "\n".join(lines))
+             f"{plan.companies[0].industry}.\n"
+             + (f"Sector norms (background, not evidence — don't cite): {note}\n" if note else "")
+             + "\n".join(lines))
     return sheet, brief
 
 

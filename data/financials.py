@@ -2,6 +2,10 @@
 
 Returns plain numbers in rupees, newest period first. No ratios here —
 see data/ratios.py for the deterministic calculations.
+
+Basis: Yahoo carries the CONSOLIDATED (group-level) accounts for Indian
+companies; standalone figures are not available from this source. Companies
+without subsidiaries report one set, so the two are the same for them.
 """
 
 from __future__ import annotations
@@ -95,11 +99,24 @@ def _convert_to_inr(rows: list[dict], currency: str) -> str:
             f"on each period-end date (Yahoo Finance {currency}INR=X).")
 
 
+BASIS = "consolidated"
+PROVIDER = "Yahoo Finance (yfinance) · consolidated"
+
+
+def fiscal_year_end_month(annual_columns) -> int:
+    """Month the company's financial year ends (3 = March, 12 = December …),
+    from its most recent annual statement. Defaults to March."""
+    cols = sorted((pd.Timestamp(c) for c in annual_columns), reverse=True)
+    return cols[0].month if cols else 3
+
+
 def get_financials(ticker: str) -> dict:
     t = yf.Ticker(ticker)
     reported_currency = (t.info or {}).get("financialCurrency") or "INR"
+    income = t.income_stmt
+    fy_end = fiscal_year_end_month([] if income is None else income.columns)
     annual = _merge(
-        _extract(t.income_stmt, INCOME_FIELDS),
+        _extract(income, INCOME_FIELDS),
         _extract(t.balance_sheet, BALANCE_FIELDS),
         _extract(t.cashflow, CASHFLOW_FIELDS),
         label_fn=fy_label,
@@ -108,7 +125,7 @@ def get_financials(ticker: str) -> dict:
         _extract(t.quarterly_income_stmt, INCOME_FIELDS),
         _extract(t.quarterly_balance_sheet, BALANCE_FIELDS),
         _extract(t.quarterly_cashflow, CASHFLOW_FIELDS),
-        label_fn=quarter_label,
+        label_fn=lambda ts: quarter_label(ts, fy_end),
     )
     # Drop quarters with no P&L (balance-sheet-only rows add noise).
     quarterly = [q for q in quarterly if q["revenue"] is not None]
@@ -121,10 +138,12 @@ def get_financials(ticker: str) -> dict:
         "ticker": ticker,
         "currency": "INR",
         "reported_currency": reported_currency,
+        "basis": BASIS,
+        "fy_end_month": fy_end,
         "annual": annual,
         "quarterly": quarterly,
         "source": {
-            "provider": "Yahoo Finance (yfinance)",
+            "provider": PROVIDER,
             "url": f"https://finance.yahoo.com/quote/{ticker}/financials",
             "fetched_at": now_iso(),
             "note": fx_note,

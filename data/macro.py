@@ -20,7 +20,7 @@ INDUSTRY_INDEX = [
 ]
 SECTOR_INDEX = {
     "Technology": ("^CNXIT", "Nifty IT"),
-    "Financial Services": ("^NSEBANK", "Nifty Bank"),
+    "Financial Services": ("NIFTY_FIN_SERVICE.NS", "Nifty Financial Services"),   # banks: above
     "Consumer Defensive": ("^CNXFMCG", "Nifty FMCG"),
     "Healthcare": ("^CNXPHARMA", "Nifty Pharma"),
     "Consumer Cyclical": ("^CNXCONSUM", "Nifty India Consumption"),
