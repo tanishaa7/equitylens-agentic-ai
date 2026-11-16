@@ -54,5 +54,8 @@ jobs:
             git -c user.name="equitylens-bot" \
                 -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
                 commit -q -m "Filings $(date -u +%Y-%m-%dT%H:%MZ)"
-            git push origin data
+            for i in 1 2 3; do                   # the app may have saved in between
+              git pull -q --rebase origin data && git push origin data && break
+              sleep 5
+            done
           fi

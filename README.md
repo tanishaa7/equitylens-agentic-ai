@@ -24,6 +24,7 @@ Social, Market data, Macro) → Bull vs bear debate → Father agent (judge)
 | Yahoo Finance | Prices, valuation, annual + quarterly statements | **Consolidated** figures; can lag new results by days, and some quarters are missing (shown in the app's *Data coverage* table) |
 | Google News (India) | Headlines from all outlets, a second pass limited to ET / Business Standard / Mint / Moneycontrol / FE / BusinessLine, and a leadership & governance search | Headlines and links only — article text is never fetched |
 | NSE official RSS feeds | Company announcements, board meetings, corporate actions (last 90 days) | NSE's feeds only hold about a day, so `.github/workflows/collect-filings.yml` collects them every 3 hours into the `data` branch; history starts on the day collection began |
+| Companies' own XBRL results filings (NSE) | Quarterly results, standalone and consolidated; for banks also gross/net NPA, CET1, RoA, deposits, advances | Uploaded in the app (*📤 Add results files*) from NSE's Integrated Filing – Financials page; saved to `results/<SYMBOL>.json` on the `data` branch and used for everyone. Only files whose lines add up are kept. Saving needs `GITHUB_TOKEN` (see `.env.example`) |
 
 Financials refresh every 2 hours during results season (mid-Jan–Feb, mid-Apr–May, mid-Jul–Aug,
 mid-Oct–Nov) and every 12 hours otherwise. Quarters past SEBI's 45/60-day filing deadline that
@@ -316,8 +317,9 @@ runlog.py         logging setup, per-run log, today's usage
   Yahoo's own summary stats. `data_warnings` flags what it can detect.
 - Quarterly history has gaps, so YoY quarter comparisons are sometimes missing,
   and some companies' latest quarter is stale (flagged).
-- Banks: EBITDA/ROCE/FCF/D/E are marked not applicable. Bank metrics (NIM, GNPA,
-  CASA) need BSE/NSE filings — a later upgrade.
+- Banks: EBITDA/ROCE/FCF/D/E are marked not applicable. Gross/net NPA, CET1 and RoA
+  come from uploaded results filings (*Bank health* table); NIM, CASA and total CRAR
+  aren't in those filings.
 
 ## Build progress
 

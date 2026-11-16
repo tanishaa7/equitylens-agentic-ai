@@ -21,7 +21,9 @@ import config
 import limits
 import runlog
 from agents.orchestrator import LABELS, ComparisonRun, run_comparison
-from data.common import fmt_pct
+from data import exchange_results, repo_store
+from data import store as cache_store
+from data.common import fmt_pct, quarter_label
 from data.store import IST
 
 runlog.setup_logging()
@@ -234,8 +236,9 @@ def head_to_head_tab(run: ComparisonRun):
     names = {c.ticker: short(c.name, c.ticker) for c in run.plan.companies}
     st.markdown("Computed by code from the statements — **the AI doesn't do the maths.** "
                 "Edge = clearly better value (ties within 5% get none).  \n"
-                "<small>📒 All figures are **consolidated** (whole group, including subsidiaries), "
-                "from Yahoo Finance. Standalone figures aren't available from this source yet.</small>",
+                "<small>📒 Figures are **consolidated** (whole group, including subsidiaries), "
+                "from Yahoo Finance, unless marked otherwise. Quarters from companies' own "
+                "results filings are listed under Data coverage.</small>",
                 unsafe_allow_html=True)
     edges = " · ".join(f"**{lens}:** {md(names.get(t, 'split'))}" for lens, t in v.lens_edges.items())
     st.markdown(f"<small>{edges}</small>", unsafe_allow_html=True)
@@ -259,6 +262,7 @@ def head_to_head_tab(run: ComparisonRun):
     with st.expander("Formulas and sources"):
         for r in v.lens_table:
             st.markdown(f"<small>**{r.metric}** — {md(r.source)}</small>", unsafe_allow_html=True)
+    bank_section(run, names)
     coverage_section(run, names)
 
     st.markdown("**Analyst scores** (0–10, 5 = in line with peers)")
@@ -269,6 +273,49 @@ def head_to_head_tab(run: ComparisonRun):
         srows.append(row)
     if srows:
         st.dataframe(pd.DataFrame(srows), hide_index=True, width="stretch")
+
+
+def bank_section(run: ComparisonRun, names: dict[str, str]):
+    """Asset quality and capital, from banks' own results filings (standalone, as banks
+    report them). Shown when at least one company has an uploaded bank filing."""
+    rows = {}
+    for c in run.companies:
+        b = ((c.get("ratios") or {}).get("exchange") or {}).get("bank")
+        if b:
+            rows[c["ticker"]] = b
+    if not rows:
+        return
+    pct = lambda v: "—" if v is None else f"{v:.2%}"
+
+    def with_prev(b, k, fmt):
+        prev = (b.get("year_ago") or {}).get(k)
+        return fmt(b.get(k)) + ("" if prev is None else f" ({fmt(prev)})")
+
+    def growth(b, k):
+        prev = (b.get("year_ago") or {}).get(k)
+        cur = b.get(k)
+        return _cr(cur) + ("" if cur is None or not prev else f" ({cur / prev - 1:+.1%} y/y)")
+
+    metrics = [
+        ("Gross NPA", "↓ lower", lambda b: with_prev(b, "gross_npa_pct", pct)),
+        ("Net NPA", "↓ lower", lambda b: with_prev(b, "net_npa_pct", pct)),
+        ("CET1 capital ratio", "↑ higher", lambda b: with_prev(b, "cet1_ratio", pct)),
+        ("Return on assets (quarter)", "↑ higher", lambda b: with_prev(b, "roa_quarter", pct)),
+        ("Deposits", "", lambda b: growth(b, "deposits")),
+        ("Advances (loans)", "", lambda b: growth(b, "advances")),
+    ]
+    table = []
+    for label, better, get in metrics:
+        row = {"Metric": label, "Better": better}
+        row.update({names.get(t, t): get(b) for t, b in rows.items()})
+        table.append(row)
+    quarters = ", ".join(f"{names.get(t, t)} {b['quarter']}" for t, b in rows.items())
+    st.markdown("**🏦 Bank health** — from the banks' own results filings (standalone)")
+    st.dataframe(pd.DataFrame(table), hide_index=True, width="stretch")
+    st.caption(f"Quarter: {quarters}. In brackets: the same quarter a year earlier. Return on "
+               "assets is for the quarter, not annualised. Total capital adequacy (CRAR) and NIM "
+               "aren't in the filings; CET1 is the core part of capital adequacy. Banks without an "
+               "uploaded filing aren't shown — add one with “📤 Add results files”.")
 
 
 def coverage_section(run: ComparisonRun, names: dict[str, str]):
@@ -289,6 +336,7 @@ def coverage_section(run: ComparisonRun, names: dict[str, str]):
                 "March" if cov.get("fy_end_month", 3) == 3 else f"month {cov['fy_end_month']}"),
             "Annual": ", ".join(cov["annual_periods"]) or "—",
             "Quarters on file": ", ".join(cov["quarters_on_file"]) or "—",
+            "From company filings": ", ".join(cov.get("from_filings") or {}) or "—",
             "Missing": ", ".join(missing) or "none",
         })
         for f in filed:
@@ -302,6 +350,9 @@ def coverage_section(run: ComparisonRun, names: dict[str, str]):
                          f"the filing deadline but not in Yahoo Finance yet — check NSE/BSE.")
         if cov.get("pending_note"):
             notes.append(f"**{md(name)}:** {md(cov['pending_note'])}")
+        if cov.get("from_filings"):
+            notes.append(f"**{md(name)}:** from its own results filings (uploaded): " + "; ".join(
+                f"{q} {' + '.join(b)}" for q, b in cov["from_filings"].items()) + ".")
     if not rows:
         return
     gaps = any(r["Missing"] != "none" for r in rows)
@@ -464,6 +515,70 @@ def results(run: ComparisonRun):
         about_tab(run)
 
 
+# ---------------------------------------------------------------- uploads
+
+MAX_UPLOADS_PER_SESSION = 12
+
+
+def _cr(v) -> str:
+    if v is None:
+        return "—"
+    if abs(v) >= 1e12:                                  # 1 lakh crore and above
+        return f"₹{v / 1e12:,.2f} lakh cr"
+    return f"₹{v / 1e7:,.0f} cr"
+
+
+def upload_section():
+    """Results XBRL files people download from NSE, for quarters Yahoo doesn't have."""
+    with st.expander("📤 Add results files (XBRL)"):
+        st.caption("For quarters our data source is missing. On nseindia.com open "
+                   "**Corporate filings → Integrated Filing – Financials** (or **Financial "
+                   "Results** for 2024 and earlier), find the company and quarter, and download "
+                   "the **XBRL** file — consolidated and/or standalone. Saved files are used in "
+                   "every comparison of that company, for everyone using EquityLens.")
+        files = st.file_uploader("XBRL files (.xml)", type=["xml"], accept_multiple_files=True,
+                                 key=f"xbrl_{st.session_state.get('upload_round', 0)}")
+        if not files or not st.button("Read and save", key="save_xbrl"):
+            return
+        if not repo_store.can_write():
+            st.error("Saving isn't set up on this site yet (needs a GitHub token in the "
+                     "app's secrets).")
+            return
+        used = st.session_state.get("uploads_used", 0)
+        if used + len(files) > MAX_UPLOADS_PER_SESSION:
+            st.error(f"Up to {MAX_UPLOADS_PER_SESSION} files per visit, please.")
+            return
+        st.session_state.uploads_used = used + len(files)
+        for f in files:
+            try:
+                r = exchange_results.parse_xbrl(f.getvalue(), f.name)
+            except exchange_results.XBRLError as ex:
+                st.error(f"**{md(f.name)}:** {ex}")
+                continue
+            fy_end = int(r["fy_end"][5:7]) if r.get("fy_end") else 3
+            label = quarter_label(pd.Timestamp(r["period_end"]), fy_end)
+            what = f"{r['symbol']} · {label} · {r['basis']}"
+            if not r["checks"]["passed"]:
+                st.warning(f"**{what}:** not saved — the figures don't add up "
+                           f"({'; '.join(r['checks']['failed'])}).")
+                continue
+            try:
+                res = exchange_results.add_filing(r)
+            except repo_store.StoreError as ex:
+                st.error(f"**{what}:** {ex}")
+                continue
+            except Exception:
+                logging.getLogger("equitylens.app").exception("saving %s failed", f.name)
+                st.error(f"**{what}:** couldn't save just now — please try again.")
+                continue
+            key = "net_interest_income" if r["template"] == "bank" else "revenue"
+            st.success(f"**{what}** saved{' (replaced the earlier copy)' if res['replaced'] else ''}"
+                       f" — {'net interest income' if key != 'revenue' else 'revenue'} "
+                       f"{_cr(r['figures'].get(key))}, net profit {_cr(r['figures'].get('net_profit'))}.")
+            cache_store.clear("exchange_results")
+        st.session_state.upload_round = st.session_state.get("upload_round", 0) + 1
+
+
 # ---------------------------------------------------------------- page
 
 def main():
@@ -476,6 +591,7 @@ def main():
         st.session_state.run = ComparisonRun.model_validate(json.loads(Path(demo).read_text()))
 
     submitted = input_section()
+    upload_section()
     if submitted or st.session_state.pop("pending", False):
         inputs = [st.session_state.get(k, "") for k in INPUT_KEYS]
         refresh = st.session_state.pop("refresh", False)

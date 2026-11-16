@@ -41,9 +41,13 @@ Compare such companies on ROE, net margin, growth and valuation.
 published it. Never say results are "not available", "not published" or "not out" — say they \
 are not in our data. If the coverage fact says results "were announced on NSE", say the \
 company has reported that quarter but its figures are not in our data yet.
-- All statements are consolidated (whole group, including subsidiaries). Say "consolidated" \
-when it matters (e.g. receivables or debt that may sit in a subsidiary). Standalone figures \
-are not in this data.
+- Banks: judge asset quality by gross and net NPA (lower is better, and falling is better) and \
+capital by the CET1 ratio (higher is a bigger buffer). Use the bank facts when present.
+- A fact marked "from the company's results filing" is newer than our main source; prefer it \
+for the latest quarter.
+- Statements are consolidated (whole group, including subsidiaries) unless a fact says \
+"standalone". Say which when it matters (e.g. receivables or debt that may sit in a \
+subsidiary). Never compare a standalone figure with a consolidated one.
 - "Sector norms" describe what is ordinary for the industry. Use them to avoid flagging normal \
 features as problems (e.g. a sector that normally carries receivables). They are background, \
 not evidence: never cite them as a source.
@@ -140,6 +144,10 @@ def _add_company(sheet: FactSheet, c: dict) -> list[str]:
                      + margin,
                   f"{provider} quarterly statements")
 
+    ex = r.get("exchange")
+    if ex:
+        _add_exchange_facts(sheet, t, ex)
+
     cov = r.get("coverage")
     if cov:
         sheet.add(t, coverage_text(cov), f"{provider} · EquityLens coverage check")
@@ -155,9 +163,57 @@ def _add_company(sheet: FactSheet, c: dict) -> list[str]:
         labels = {k: lbl for k, lbl, _ in METRICS} | {"ev_ebitda": "EV/EBITDA"}
         header.append("Financial company: "
                       + ", ".join(labels.get(k, k) for k in r["not_applicable"])
-                      + " are not applicable. Bank metrics such as NIM, GNPA and CASA are "
-                        "not available in this data.")
+                      + " are not applicable."
+                      + (" Bank asset quality and capital come from the bank's own results "
+                         "filing (see the facts); NIM and CASA are not in it."
+                         if ex and ex.get("bank") else
+                         " Bank metrics such as NIM, GNPA and CASA are not available in this data."))
     return header
+
+
+EX_LABELS = [("total_income", "total income"), ("revenue", "revenue"),
+             ("net_interest_income", "net interest income"), ("operating_profit", "operating profit"),
+             ("provisions", "provisions"), ("net_profit", "net profit")]
+
+
+def _add_exchange_facts(sheet: FactSheet, t: str, ex: dict) -> None:
+    """Figures from the company's own XBRL results filings (uploaded in the app)."""
+    lt = ex.get("latest")
+    if lt and ex.get("latest_is_newer"):
+        parts = []
+        for key, label in EX_LABELS:
+            v = lt["figures"].get(key)
+            if v is None:
+                continue
+            yoy = lt["yoy"].get(key)
+            parts.append(f"{label} {fmt_cr(v)}" + ("" if yoy is None else f" ({fmt_pct(yoy)} YoY)"))
+        ago = (f"year-ago quarter {lt['year_ago_quarter']} also from the filings"
+               if lt["year_ago_quarter"] else "year-ago quarter not on file")
+        sheet.add(t, f"Latest quarter {lt['quarter']} ({lt['basis']}, from the company's results "
+                     f"filing — newer than our main source): " + "; ".join(parts) + f"; {ago}",
+                  f"Company XBRL results filing (NSE) · {lt['source_file']}")
+    b = ex.get("bank")
+    if b:
+        prev = b.get("year_ago") or {}
+        def pct(k, label):
+            v = b.get(k)
+            if v is None:
+                return None
+            was = prev.get(k)
+            return f"{label} {v:.2%}" + ("" if was is None else
+                                          f" ({b['year_ago_quarter']}: {was:.2%})")
+        parts = [x for x in (pct("gross_npa_pct", "gross NPA"), pct("net_npa_pct", "net NPA"),
+                             pct("cet1_ratio", "CET1 capital ratio"),
+                             pct("roa_quarter", "return on assets for the quarter (not annualised)"))
+                 if x]
+        for k, label in (("deposits", "deposits"), ("advances", "advances")):
+            if b.get(k) is not None:
+                growth = (None if not prev.get(k) else b[k] / prev[k] - 1)
+                parts.append(f"{label} {fmt_cr(b[k])}"
+                             + ("" if growth is None else f" ({fmt_pct(growth)} YoY)"))
+        sheet.add(t, f"Asset quality and capital, {b['quarter']} (standalone, as banks report "
+                     f"them): " + "; ".join(parts),
+                  "Company XBRL results filing (NSE) · RBI-format bank results")
 
 
 def coverage_text(cov: dict) -> str:
@@ -165,6 +221,9 @@ def coverage_text(cov: dict) -> str:
     parts = [f"Data coverage ({cov.get('basis', 'consolidated')} statements): annual "
              + (", ".join(cov["annual_periods"]) or "none")
              + "; quarters " + (", ".join(cov["quarters_on_file"]) or "none")]
+    if cov.get("from_filings"):
+        parts.append("from the company's own results filings: " + ", ".join(
+            f"{q} ({'/'.join(b)})" for q, b in cov["from_filings"].items()))
     if cov["missing_quarters"]:
         parts.append("missing from source: " + ", ".join(cov["missing_quarters"]))
     if cov["not_in_source_yet"]:
@@ -196,7 +255,7 @@ def build_prompt(companies: list[dict], macro: dict | None = None) -> tuple[Fact
     prompt = (
         f"Compare the financial strength of: {names}.\n"
         "All money is in Indian rupees; ₹ cr = crore. FY26 = fiscal year April 2025 – March 2026. "
-        "All statements are consolidated. "
+        "Statements are consolidated unless a fact says standalone. "
         "'n/a' = not available. '—' = could not be calculated.\n\n"
         + _sector_block(companies)
         + "\n\n".join(blocks)
