@@ -33,7 +33,11 @@ if not config.gemini_key():   # shows in the server log (Manage app → logs), n
 
 st.set_page_config(page_title="EquityLens", page_icon="🔍", layout="wide")
 
-EXAMPLES = [("TCS", "Infosys"), ("HDFC Bank", "ICICI Bank"), ("Titan", "Kalyan Jewellers")]
+# Each one checked to resolve to the intended companies in the same industry.
+EXAMPLES = [("TCS", "Infosys"), ("HDFC Bank", "ICICI Bank"), ("Titan", "Kalyan Jewellers"),
+            ("Maruti Suzuki", "Hyundai"), ("Asian Paints", "Berger Paints"),
+            ("Bharti Airtel", "Vodafone Idea"), ("ICRA", "CRISIL", "CARE Ratings")]
+EXAMPLES_PER_ROW = 4
 INPUT_KEYS = ["c1", "c2", "c3"]
 STAGES = {"plan": "Checking companies", "cache": "Saved result", "data": "Fetching data",
           "agent": "Specialist agents",
@@ -80,8 +84,9 @@ def point(text: str, sources: list[str], notes: Footnotes, prefix: str = "- "):
 
 # ---------------------------------------------------------------- input
 
-def set_example(a: str, b: str):
-    st.session_state.update(c1=a, c2=b, c3="", pending=True)
+def set_example(*names: str):
+    names = (*names, "", "")[:3]
+    st.session_state.update(c1=names[0], c2=names[1], c3=names[2], pending=True)
 
 
 def run_fresh():
@@ -104,9 +109,11 @@ def input_section():
         st.checkbox("Allow companies from different sectors (less meaningful)", key="allow")
         submitted = st.form_submit_button("Compare", type="primary")
     st.caption("Try:")
-    cols = st.columns(len(EXAMPLES))
-    for col, (a, b) in zip(cols, EXAMPLES):
-        col.button(f"{a} vs {b}", on_click=set_example, args=(a, b), width="stretch")
+    for start in range(0, len(EXAMPLES), EXAMPLES_PER_ROW):
+        row = EXAMPLES[start:start + EXAMPLES_PER_ROW]
+        cols = st.columns(EXAMPLES_PER_ROW)
+        for col, names in zip(cols, row):
+            col.button(" vs ".join(names), on_click=set_example, args=names, width="stretch")
     return submitted
 
 
