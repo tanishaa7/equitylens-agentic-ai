@@ -29,7 +29,7 @@ from agents import llm
 from agents.llm import AIUnavailable, generate, model_for
 from agents.planner import Plan
 from agents.schemas import AgentReport
-from data.common import fmt_pct
+from data.common import fmt_cr, fmt_pct
 from data.ratios import FORMULAS
 
 log = logging.getLogger("equitylens.judge")
@@ -176,6 +176,22 @@ def _not_like_for_like(r: dict) -> bool:
     return any(w.startswith("Revenue changed") for w in r["data_warnings"])
 
 
+def _receivables_trend(r: dict) -> str:
+    """' (FY25: 45 days) · ₹120 Cr, +8% y/y' — so one year's number isn't read on its own."""
+    if len(r["by_year"]) < 2:
+        return ""
+    cur, prev = r["by_year"][0], r["by_year"][1]
+    out = ""
+    if prev.get("receivable_days") is not None:
+        out += f" ({prev['period']}: {_days(prev['receivable_days'])})"
+    a, b = cur.get("receivables"), prev.get("receivables")
+    if a is not None:
+        out += f" · {fmt_cr(a)}"
+        if b:
+            out += f", {a / b - 1:+.0%} y/y"
+    return out
+
+
 def lens_table(companies: list[dict]) -> list[LensRow]:
     rows = []
     for lens, metric, get, better, fmt, tol, key in LENS_METRICS:
@@ -187,6 +203,8 @@ def lens_table(companies: list[dict]) -> list[LensRow]:
                 continue
             v = get(r)
             values[c["ticker"]] = "—" if v is None else fmt(v)
+            if key == "receivable_days" and v is not None:
+                values[c["ticker"]] += _receivables_trend(r)
             if lens == "Growth" and v is not None and _not_like_for_like(r):
                 values[c["ticker"]] += " *"
                 distorted.append(c["ticker"])

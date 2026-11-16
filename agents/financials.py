@@ -39,7 +39,8 @@ Compare such companies on ROE, net margin, growth and valuation.
 - Data warnings are reasons for caution: mention them in red_flags or data_gaps and lower confidence.
 - A quarter missing from the data is a gap in our data source, not proof the company hasn't \
 published it. Never say results are "not available", "not published" or "not out" — say they \
-are not in our data.
+are not in our data. If the coverage fact says results "were announced on NSE", say the \
+company has reported that quarter but its figures are not in our data yet.
 - All statements are consolidated (whole group, including subsidiaries). Say "consolidated" \
 when it matters (e.g. receivables or debt that may sit in a subsidiary). Standalone figures \
 are not in this data.
@@ -169,6 +170,9 @@ def coverage_text(cov: dict) -> str:
     if cov["not_in_source_yet"]:
         parts.append("past the filing deadline but not in our source yet: "
                      + ", ".join(cov["not_in_source_yet"]))
+    for f in cov.get("filed_not_in_source") or []:
+        parts.append(f"{f['quarter']} results were announced on NSE ({f['filed']}) but are not "
+                     "in our source yet, so those figures are missing here")
     if cov.get("pending_note"):
         parts.append(cov["pending_note"])
     return "; ".join(parts)

@@ -194,12 +194,57 @@ def coverage(fin: dict, today: date | None = None) -> dict:
         "fy_end_month": fy_end,
         "annual_periods": [r["period"] for r in fin["annual"] if r["revenue"] is not None],
         "quarters_on_file": [label(e) for e in ends],
+        "newest_quarter_end": newest.isoformat() if newest else None,
         "missing_quarters": gaps,
         "latest_due_quarter": label(due) if due else None,
         "latest_due_deadline": results_deadline(due, fy_end).isoformat() if due else None,
         "not_in_source_yet": behind,     # deadline passed, source doesn't have them
         "pending_note": pending_note,    # deadline not passed yet — not a problem
     }
+
+
+def add_exchange_filings(ratios: dict, filings: dict | None) -> dict:
+    """Use the company's NSE filings to tell "results are out but our data source doesn't
+    have them yet" apart from "results may not be out yet". Adds coverage["filed_not_in_source"]
+    and rewrites the data-source warning to say what the exchange shows. Returns `ratios`."""
+    cov = ratios.get("coverage")
+    if not cov or not filings:
+        return ratios
+    fy_end = cov.get("fy_end_month") or 3
+    newest = cov.get("newest_quarter_end")
+    filed = []
+    for f in filings.get("results_filed") or []:
+        q_end = date.fromisoformat(f["quarter_end"])
+        if newest and q_end <= date.fromisoformat(newest):
+            continue
+        filed.append({"quarter": quarter_label(pd.Timestamp(q_end), fy_end),
+                      "quarter_end": f["quarter_end"], "filed": (f.get("filed") or "")[:10],
+                      "link": f.get("link")})
+    cov["filed_not_in_source"] = filed
+    if not filed:
+        return ratios
+
+    labels = [f["quarter"] for f in filed]
+    if cov.get("pending_note") and any(l in cov["pending_note"] for l in labels):
+        cov["pending_note"] = None           # not "may not be published yet": it's out
+    behind = list(dict.fromkeys(cov["not_in_source_yet"] + list(reversed(labels))))
+    on_file = cov["quarters_on_file"][0] if cov["quarters_on_file"] else "none"
+    filed_txt = "; ".join(f"{f['quarter']} on {_day(f['filed'])}" for f in filed)
+    warning = (f"Our data source (Yahoo Finance) does not have {', '.join(behind)} results yet. "
+               f"The company's NSE filings show results were announced ({filed_txt}), so "
+               f"those figures exist but are missing from this comparison. "
+               f"Newest quarter in our data: {on_file}.")
+    ratios["data_warnings"] = [warning] + [
+        w for w in ratios["data_warnings"]
+        if not w.startswith("Our data source (Yahoo Finance) does not have")]
+    return ratios
+
+
+def _day(iso: str) -> str:
+    try:
+        return date.fromisoformat(iso[:10]).strftime("%d %b %Y").lstrip("0")
+    except ValueError:
+        return iso or "a recent date"
 
 
 def _relative_gap(a, b):

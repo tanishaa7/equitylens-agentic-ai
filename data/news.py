@@ -77,13 +77,66 @@ def _mentions(title: str, name: str, symbol: str | None) -> bool:
     return bool(symbol) and re.search(rf"\b{re.escape(symbol.lower())}\b", t) is not None
 
 
-def get_company_news(name: str, symbol: str | None = None, days: int = 365) -> dict:
+# Rating agencies and research houses are quoted in hundreds of headlines about *other*
+# companies and the economy ("Gold loan delinquencies may rise: ICRA"). For them, those
+# headlines are dropped so their own news (results, leadership, regulators) isn't buried.
+_COMMENTATOR_RE = re.compile(r"\b(financial data|credit rating|rating agenc|research)\b", re.I)
+_RATING_ACTION = (r"(reaffirms?|upgrades?|downgrades?|assigns?|revises?|withdraws?|places?|"
+                  r"retains?|maintains?)")
+_FORECAST = (r"(sees|raises|cuts|lowers|forecasts?|expects|estimates|projects|pegs|keeps|"
+             r"says|said|predicts|maps)")
+_OWN_NEWS = re.compile(r"\b(its|dividend|shares?|stake|results?|acqui\w*|ceo|director|board|"
+                       r"chairman|sebi)\b", re.I)
+
+
+def is_commentator(industry: str | None, name: str | None = None) -> bool:
+    text = f"{industry or ''} {name or ''}"
+    return bool(_COMMENTATOR_RE.search(text) or re.search(r"\b(icra|crisil|care ratings)\b", text, re.I))
+
+
+def _short_names(name: str, symbol: str | None) -> list[str]:
+    short = re.sub(r"\s+(limited|ltd\.?)$", "", name.strip(), flags=re.I)
+    return [n for n in dict.fromkeys([short, name, symbol or ""]) if n]
+
+
+def quotes_company(title: str, name: str, symbol: str | None) -> bool:
+    """Headline quotes the company as a source or reports one of its ratings on someone
+    else, rather than being about the company itself."""
+    n = "(?:" + "|".join(re.escape(x) for x in _short_names(name, symbol)) + ")"
+    suffix = r"(?:\s+(?:ltd\.?|limited|group|analytics|ratings|research|report|ceo))*"
+    grade = r"[A-D]{1,3}[0-9]?\+?-?(?:\s*/\s*\w+)?"                            # AAA/Stable, A1+, A-
+    rated = r"(?:credit\s+)?(?:ratings?|reaffirmed|upgraded|downgraded|upgrade|downgrade)"
+    patterns = [
+        r"^quote on .+ by ",                                                  # Quote on CPI by …
+        rf"[:,]\s+[^:,]{{0,40}}\b{n}{suffix}"
+        r"(?:\s+(?:chief|top)\s+economist)?\.?\s*$",                          # …: ICRA / …, ICRA
+        rf"\bsays\s+{n}\b",                                                  # …, says ICRA
+        rf"[,;]\s*{n}{suffix}\s+(?:says|said)\b",                              # …, Crisil says
+        rf"\b{n}{suffix}\s+{_RATING_ACTION}\b",                                       # ICRA reaffirms X
+        rf"\b(?:on|by|from|receives?|gets|secures?|with)\s+(?:provisional\s+)?{n}\s+"
+        rf"(?:{grade}[\s-]+)?(?:ratings?|upgrade|downgrade)\b",                # on ICRA upgrade
+        rf"\b(?:ratings?|upgrade[sd]?|downgrade[sd]?|reaffirmed)\s+(?:[\w/+-]+\s+){{0,3}}?(?:from|by)\s+{n}\b",
+        rf"\b{n}\s+{grade}[\s-]+{rated}\b",                                 # CRISIL AAA/Stable rating
+        rf"\b{n}[\s-]+IBX\b",                                                 # index funds on its indices
+        rf"\b{n}['’]s\s+(?:[\w.]+\s+){{0,4}}?(?:economist\s+)?(?:expects|sees|says|predicts|"
+        r"forecasts|estimates)\b",                                           # Crisil's DK Joshi expects
+        rf"{n}['’]s\s+(?:top|chief)\s+economist",
+    ]
+    if any(re.search(p, title, re.I) for p in patterns):
+        return True
+    m = re.search(rf"(?:^|[:;]\s*){n}{suffix}\s+{_FORECAST}\b", title, re.I)       # ICRA sees …
+    return bool(m) and not _OWN_NEWS.search(title[m.end():])
+
+
+def get_company_news(name: str, symbol: str | None = None, days: int = 365,
+                     commentator: bool = False) -> dict:
     """Three Google News searches merged into one list, each headline tagged with its feed:
       general    — any outlet mentioning the company
       press      — ET, Business Standard, Mint, Moneycontrol, FE, BusinessLine only
       governance — leadership, board, regulator and auditor stories
     Press and governance headlines are kept only if they name the company, and governance
-    ones only if the headline itself is about leadership/regulation."""
+    ones only if the headline itself is about leadership/regulation. For a `commentator`
+    (rating agency, research house) headlines that merely quote it are dropped."""
     sites = " OR ".join(f"site:{s}" for s in PRESS_SITES)
     terms = " OR ".join(GOVERNANCE_TERMS)
     feeds = {
@@ -97,11 +150,14 @@ def get_company_news(name: str, symbol: str | None = None, days: int = 365) -> d
         "governance": lambda a: (_mentions(a["title"], name, symbol)
                                  and _GOVERNANCE_RE.search(a["title"]) is not None),
     }
-    merged, seen, counts = [], {}, {}
+    merged, seen, counts, quoted = [], {}, {}, set()
     for feed, res in feeds.items():
         counts[feed] = 0
         for a in res["articles"]:
             if not keep[feed](a):
+                continue
+            if commentator and quotes_company(a["title"], name, symbol):
+                quoted.add(a["title"].lower())
                 continue
             key = a["title"].lower()
             if key in seen:                       # same headline in two feeds: keep both tags
@@ -121,6 +177,7 @@ def get_company_news(name: str, symbol: str | None = None, days: int = 365) -> d
         "articles": merged,
         "total_found": len(merged),
         "feed_counts": counts,
+        "quoted_skipped": len(quoted),
         "feed_status": statuses,
         "status": "ok" if len(ok) == len(feeds) else (
             f"ok (partial: {', '.join(f for f in feeds if f not in ok)} unavailable)" if ok

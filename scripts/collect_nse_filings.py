@@ -49,7 +49,9 @@ def symbol_from_link(link: str) -> str | None:
         return None
     name = path.rsplit("/", 1)[-1]
     m = _SYMBOL_TS.match(name) or _SYMBOL_ANY.match(name)
-    return m.group(1) if m else None
+    if not m or m.group(1).isdigit():    # some files start with a number, not the symbol
+        return None
+    return m.group(1)
 
 
 def _field(description: str, key: str) -> str | None:

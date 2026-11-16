@@ -279,7 +279,9 @@ def coverage_section(run: ComparisonRun, names: dict[str, str]):
         if not cov:
             continue
         name = names.get(c["ticker"], c["ticker"])
-        missing = cov["missing_quarters"] + cov["not_in_source_yet"]
+        filed = cov.get("filed_not_in_source") or []
+        missing = list(dict.fromkeys(cov["missing_quarters"] + cov["not_in_source_yet"]
+                                     + [f["quarter"] for f in reversed(filed)]))
         rows.append({
             "Company": name,
             "Basis": cov.get("basis", "consolidated").title(),
@@ -289,8 +291,14 @@ def coverage_section(run: ComparisonRun, names: dict[str, str]):
             "Quarters on file": ", ".join(cov["quarters_on_file"]) or "—",
             "Missing": ", ".join(missing) or "none",
         })
-        if cov["not_in_source_yet"]:
-            notes.append(f"**{md(name)}:** {', '.join(cov['not_in_source_yet'])} results are past "
+        for f in filed:
+            link = f" — [official filing]({f['link']})" if f.get("link") else ""
+            notes.append(f"**{md(name)}:** {f['quarter']} results were announced on NSE "
+                         f"({f['filed']}) but aren't in Yahoo Finance yet, so this comparison "
+                         f"doesn't include them{link}.")
+        late = [q for q in cov["not_in_source_yet"] if q not in {f["quarter"] for f in filed}]
+        if late:
+            notes.append(f"**{md(name)}:** {', '.join(late)} results are past "
                          f"the filing deadline but not in Yahoo Finance yet — check NSE/BSE.")
         if cov.get("pending_note"):
             notes.append(f"**{md(name)}:** {md(cov['pending_note'])}")

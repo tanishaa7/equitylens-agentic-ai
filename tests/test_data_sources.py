@@ -193,6 +193,79 @@ def test_filings_collector_and_reader():
     print("[ok] NSE filings: parse, skip funds, dedupe, match by symbol or name, drop routine")
 
 
+def test_results_filed_on_nse():
+    from data.filings import results_filed
+    from data.ratios import add_exchange_filings
+    rows = [
+        {"kind": "announcement", "subject": "Copy of Newspaper Publication",
+         "detail": "Copy of Newspaper Publication of Unaudited Financial Results for the quarter "
+                   "and half year ended September 30, 2026", "published": "2026-10-30T09:00:00+05:30",
+         "link": "https://x/ad.pdf"},
+        {"kind": "announcement", "subject": "Outcome of Board Meeting",
+         "detail": "Financial Results for the quarter ended 30th September, 2026",
+         "published": "2026-10-28T18:02:00+05:30", "link": "https://x/outcome.pdf"},
+        {"kind": "announcement", "subject": "Reasons for Delayed/Non-submission of Financial Results",
+         "detail": "Delay in Financial Results for quarter ended 30.06.2026", "published": "2026-08-20"},
+        {"kind": "board_meeting", "subject": "Financial Results",
+         "detail": "To consider Financial Results for quarter ended December 31, 2026",
+         "published": "2026-11-15"},
+        {"kind": "announcement", "subject": "Copy of Newspaper Publication",
+         "detail": "financial results for quarter ended June 2026", "published": "2026-08-10"},
+    ]
+    filed = results_filed(rows)
+    assert [f["quarter_end"] for f in filed] == ["2026-09-30", "2026-06-30"], filed
+    assert filed[0]["link"] == "https://x/outcome.pdf"            # earliest filing wins
+
+    cov = {"fy_end_month": 3, "annual_periods": ["FY26"], "quarters_on_file": ["Q1 FY27"], "newest_quarter_end": "2026-06-30",
+           "not_in_source_yet": [], "missing_quarters": [],
+           "pending_note": "Q2 FY27 results may not be published yet (deadline 14 Nov 2026)."}
+    ratios = {"coverage": cov, "data_warnings": ["Our P/E differs"]}
+    add_exchange_filings(ratios, {"results_filed": filed})
+    assert [f["quarter"] for f in cov["filed_not_in_source"]] == ["Q2 FY27"]
+    assert cov["pending_note"] is None                             # it's out, not pending
+    w = ratios["data_warnings"][0]
+    assert w.startswith("Our data source (Yahoo Finance) does not have Q2 FY27") and "28 Oct 2026" in w
+    assert "Q2 FY27 results were announced on NSE" in coverage_text(cov)
+    assert collector.symbol_from_link("https://nsearchives.nseindia.com/corporate/7303087361_16112026_x.pdf") is None
+    print("[ok] results filed on NSE but missing from Yahoo are detected and explained")
+
+
+def test_quoted_source_headlines():
+    from data.news import is_commentator, quotes_company
+    assert is_commentator("Financial Data & Stock Exchanges") and not is_commentator("Banks - Regional", "HDFC Bank")
+    dropped = ["Fresh stressed loans formation may rise in H2: ICRA",
+               "Quote on CPI by Aditi Nayar, Chief Economist, ICRA Ltd",
+               "ICRA raises FY27 power demand growth forecast to 8.5% as consumption surges",
+               "ICRA Reaffirms Ashok Leyland Ratings Across Rs 7,379 Crore Debt Instruments",
+               "Orient Green Power Hits ₹10.49 High on ICRA Upgrade",
+               "RBI rate hike: ICRA sees one more 25-bps hike",
+               "RBI's new deposit insurance framework to boost bank profitability, says ICRA"]
+    kept = ["ICRA director Stephen Long resigns effective January 1, 2027",
+            "ICRA Reports Q2 Revenue of ₹178 Crore vs ₹137 Crore YoY",
+            "Analyst Estimates: Here's What Brokers Think Of ICRA Limited (NSE:ICRA) After Its Second-Quarter Report",
+            "ICRA secures 100% control of D2K Technologies with ₹32 crore stake acquisition",
+            "CARE Ratings vs ICRA: Similar business, different bets"]
+    for t in dropped:
+        assert quotes_company(t, "ICRA", "ICRA"), t
+    for t in kept:
+        assert not quotes_company(t, "ICRA", "ICRA"), t
+    assert quotes_company("CARE Ratings upgrades ratings of Apar Industries to 'AA'", "CARE Ratings", "CARERATING")
+    assert not quotes_company("Care Ratings Q2 net profit up 28 pc at Rs 73 cr", "CARE Ratings", "CARERATING")
+    print("[ok] rating agencies: headlines that only quote them are dropped, their own news kept")
+
+
+def test_receivables_trend_and_benchmark():
+    from agents.judge import _receivables_trend
+    from data.macro import pick_sector_index
+    r = {"by_year": [{"period": "FY26", "receivable_days": 49, "receivables": 80e7},
+                     {"period": "FY25", "receivable_days": 37, "receivables": 50e7}]}
+    t = _receivables_trend(r)
+    assert "FY25: 37 days" in t and "+60% y/y" in t, t
+    assert pick_sector_index("Financial Services", "Financial Data & Stock Exchanges")[1] == "Nifty Financial Services"
+    assert pick_sector_index("Financial Services", "Banks - Regional")[1] == "Nifty Bank"
+    print("[ok] receivables shown with last year and the change; non-bank financials vs Nifty Financial Services")
+
+
 def main():
     test_quarter_labels()
     test_coverage_and_deadlines()
@@ -201,6 +274,9 @@ def main():
     test_sector_notes()
     test_financials_prompt_has_coverage_and_norms()
     test_filings_collector_and_reader()
+    test_results_filed_on_nse()
+    test_quoted_source_headlines()
+    test_receivables_trend_and_benchmark()
     print("\nAll data-source tests passed.")
 
 

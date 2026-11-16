@@ -10,8 +10,8 @@ from data.filings import get_filings
 from data.financials import get_financials
 from data.macro import get_macro_data
 from data.market import get_market_data
-from data.news import get_company_news
-from data.ratios import compute_ratios
+from data.news import get_company_news, is_commentator
+from data.ratios import add_exchange_filings, compute_ratios
 from data.social import get_reddit_posts
 from data.store import HOUR, MIN, cached_call
 
@@ -58,10 +58,14 @@ def collect_company(ticker: str, parts=ALL_PARTS) -> dict:
         out["ratios"] = compute_ratios(fin, market)   # cheap, and depends on today's price
     if "news" in parts:
         symbol = ticker.split(".")[0]
-        out["news"] = cached_call("news", f"v2|{market['name']}|{symbol}", TTL["news"],
-                                  get_company_news, market["name"], symbol, ok=_ok_status)
+        commentator = is_commentator(market.get("industry"), market["name"])
+        out["news"] = cached_call("news", f"v3|{market['name']}|{symbol}|{commentator}", TTL["news"],
+                                  get_company_news, market["name"], symbol,
+                                  commentator=commentator, ok=_ok_status)
         out["filings"] = cached_call("filings", f"{symbol}|{market['name']}", TTL["filings"],
                                      get_filings, symbol, market["name"], ok=_ok_status)
+        if "ratios" in out:
+            add_exchange_filings(out["ratios"], out["filings"])
     if "social" in parts:
         out["social"] = cached_call("social", market["name"], TTL["social"], get_reddit_posts,
                                     market["name"], ok=_ok_status)
@@ -69,7 +73,7 @@ def collect_company(ticker: str, parts=ALL_PARTS) -> dict:
 
 
 def macro_for(sector: str | None, industry: str | None) -> dict:
-    return cached_call("macro", f"{sector}|{industry}", TTL["macro"], get_macro_data,
+    return cached_call("macro", f"v2|{sector}|{industry}", TTL["macro"], get_macro_data,
                        sector, industry, ok=lambda v: bool(v["benchmark"]["returns"]))
 
 
