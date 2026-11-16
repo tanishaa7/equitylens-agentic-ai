@@ -94,6 +94,48 @@
     "board_meeting": "2025-10-18",
     "added_at": "2026-11-16T08:26:21+00:00"
    }
+  },
+  {
+   "symbol": "HDFCBANK",
+   "company": null,
+   "template": "bank",
+   "basis": "consolidated",
+   "period_type": "quarter",
+   "period_start": "2025-07-01",
+   "period_end": "2025-09-30",
+   "fy_end": "2026-03-31",
+   "audited": false,
+   "figures": {
+    "interest_earned": 869938400000.0,
+    "other_income": 315667900000.0,
+    "total_income": 1185606300000.0,
+    "interest_expended": 467408600000.0,
+    "employee_cost": 93175600000.0,
+    "operating_expenses": 408790500000.0,
+    "operating_profit": 309407200000.0,
+    "provisions": 42818300000.0,
+    "exceptional_items": -7531000000.0,
+    "profit_before_tax": 259057900000.0,
+    "tax": 62951200000.0,
+    "profit_after_tax": 196106700000.0,
+    "net_profit": 196106700000.0,
+    "net_profit_owners": 196106700000.0,
+    "eps_basic": 12.78,
+    "net_interest_income": 402529800000.0
+   },
+   "bank": null,
+   "checks": {
+    "passed": true,
+    "failed": []
+   },
+   "source": {
+    "kind": "xbrl",
+    "file": "INTEGRATED_FILING_BANKING_1553886_18102025082322_WEB.xml",
+    "format": "integrated filing",
+    "sha256": "d7431b6f7c0c3e5386683b713a28e75485f31faf0908999f9964b5faa5d3a0de",
+    "board_meeting": "2025-10-18",
+    "added_at": "2026-11-16T08:26:22+00:00"
+   }
   }
  ],
  "company": null
