@@ -5,8 +5,12 @@ Run:  .venv/bin/python -m tests.test_planner
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 import agents.planner as planner
 from agents.planner import make_plan
+from data import lookup, store
 
 PROFILES = {
     "TCS.NS": ("Tata Consultancy Services", "Technology", "Information Technology Services", 9e12),
@@ -18,12 +22,25 @@ PROFILES = {
     "BSE.NS": ("BSE", "Financial Services", "Financial Data & Stock Exchanges", 1e12),
     "TMCV.NS": ("Tata Motors", "Consumer Cyclical", "Auto Manufacturers", 1e12),
     "TMPV.NS": ("Tata Motors Passenger Vehicles", "Consumer Cyclical", "Auto Manufacturers", 1e12),
+    "SUNPHARMA.NS": ("Sun Pharmaceutical Industries", "Healthcare", "Drug Manufacturers - Specialty & Generic", 4.5e12),
+    "SPARC.NS": ("Sun Pharma Advanced Research Company", "Healthcare", "Biotechnology", 6.4e10),
+    "CIPLA.NS": ("Cipla", "Healthcare", "Drug Manufacturers - Specialty & Generic", 1.2e12),
+    "M&M.NS": ("Mahindra & Mahindra", "Consumer Cyclical", "Auto Manufacturers", 4e12),
+    "M&MFIN.NS": ("Mahindra & Mahindra Financial Services", "Financial Services", "Credit Services", 4e11),
+    "SBIN.NS": ("State Bank of India", "Financial Services", "Banks - Regional", 1e13),
+    "SBILIFE.NS": ("SBI Life Insurance Company", "Financial Services", "Insurance - Life", 1.8e12),
 }
+# query -> [(ticker, exact, extra)]: extra = name words the user didn't type
 SEARCH = {
-    "infosys": [("INFY.NS", True), ("HCL-INSYS.NS", False)],
-    "tata motors": [("TMCV.NS", True), ("TMPV.NS", True)],
-    "tata consultancy": [("TCS.NS", True)],
-    "infosis": [("INFY.NS", False)],     # typo: no exact match → "did you mean"
+    "infosys": [("INFY.NS", True, 0), ("HCL-INSYS.NS", False, 2)],
+    "tata motors": [("TMCV.NS", True, 0), ("TMPV.NS", True, 2)],
+    "tata consultancy": [("TCS.NS", True, 1)],
+    "infosis": [("INFY.NS", False, 1)],     # typo: no exact match → "did you mean"
+    "sun pharma": [("SUNPHARMA.NS", True, 1), ("SPARC.NS", True, 3)],
+    "cipla": [("CIPLA.NS", True, 0)],
+    "mahindra & mahindra": [("M&M.NS", True, 0), ("M&MFIN.NS", True, 2)],
+    "tata": [("TCS.NS", True, 2), ("TMCV.NS", True, 1)],   # TCS is 9x bigger but a looser fit
+    "sbi": [("SBILIFE.NS", True, 3)],
 }
 
 
@@ -38,11 +55,76 @@ def fake_lookup(symbol):
 
 def fake_search(query):
     return [{"ticker": t, "name": PROFILES[t][0], "sector": PROFILES[t][1],
-             "industry": PROFILES[t][2], "exchange": "NSE", "exact": exact}
-            for t, exact in SEARCH.get(query.lower().strip(), [])]
+             "industry": PROFILES[t][2], "exchange": "NSE", "exact": exact, "extra": extra}
+            for t, exact, extra in SEARCH.get(query.lower().strip(), [])]
+
+
+def _quote(symbol, longname, sector="Healthcare"):
+    return {"symbol": symbol, "exchange": "NSI" if symbol.endswith(".NS") else "BSE",
+            "quoteType": "EQUITY", "longname": longname, "sector": sector, "industry": "x"}
+
+
+# Raw Yahoo search replies, shaped like the real ones for these names (Nov 2026)
+YAHOO = {
+    "Sun Pharma": [_quote("SUNPHARMA.NS", "Sun Pharmaceutical Industries Limited"),
+                   _quote("SPARC.NS", "Sun Pharma Advanced Research Company Limited"),
+                   {**_quote("6887.HK", "Sunshine Lake Pharma Co., Ltd."), "exchange": "HKG"},
+                   _quote("SUNPHARMA.BO", "Sun Pharmaceutical Industries Limited")],
+    "Nestle India": [_quote("NESTLEIND.NS", "Nestlé India Limited", "Consumer Defensive")],
+    "Mahindra & Mahindra": [_quote("M&M.NS", "Mahindra & Mahindra Limited", "Consumer Cyclical"),
+                            _quote("M&MFIN.NS", "Mahindra & Mahindra Financial Services Limited",
+                                   "Financial Services")],
+    "Dr Reddys": [],                                  # Yahoo only knows "Dr. Reddy's"
+    "Dr Reddy": [_quote("DRREDDY.NS", "Dr. Reddy's Laboratories Limited")],
+    "Larsen and Toubro": [],
+    "Larsen & Toubro": [_quote("LT.NS", "Larsen & Toubro Limited", "Industrials")],
+    "Infosys": [_quote("INFY.NS", "Infosys Limited", "Technology"),
+                _quote("HCL-INSYS.NS", "HCL Infosystems Limited", "Technology")],
+    "Infosis": [], "Infosi": [],
+}
+
+
+def lookup_tests():
+    """search_company's name matching, on canned Yahoo replies (no network)."""
+    store.ROOT = Path(tempfile.mkdtemp())
+    asked = []
+    lookup._search_quotes = lambda q, limit: asked.append(q) or YAHOO.get(q, [])
+
+    def found(query):
+        return {c["ticker"]: (c["exact"], c["extra"]) for c in lookup.search_company(query)}
+
+    assert found("Sun Pharma") == {"SUNPHARMA.NS": (True, 1), "SPARC.NS": (True, 3)}
+    print("[ok] 'pharma' matches 'Pharmaceutical' (start of a word); BSE twin and non-Indian dropped")
+
+    assert found("Nestle India") == {"NESTLEIND.NS": (True, 0)}
+    print("[ok] accents ignored: 'Nestle India' is an exact match for 'Nestlé India'")
+
+    assert found("Mahindra & Mahindra") == {"M&M.NS": (True, 0), "M&MFIN.NS": (True, 2)}
+    print("[ok] both Mahindras match; the closer fit has fewer extra words")
+
+    asked.clear()
+    assert found("Dr Reddys") == {"DRREDDY.NS": (True, 1)}
+    assert asked == ["Dr Reddys", "Dr Reddy"], asked
+    assert lookup._match(lookup._words("Dr. Reddy's"), "Dr. Reddy's Laboratories Limited") == (True, 1)
+    print("[ok] 'Dr Reddys': retried as 'Dr Reddy', then matched with apostrophe/dot ignored")
+
+    asked.clear()
+    assert found("Larsen and Toubro") == {"LT.NS": (True, 0)} and asked[-1] == "Larsen & Toubro"
+    print("[ok] 'and' retried as '&'")
+
+    assert found("Infosys") == {"INFY.NS": (True, 0), "HCL-INSYS.NS": (True, 1)}
+    assert found("Infosis") == {}
+    assert lookup._match({"co"}, "Coal India Limited") == (False, 2)    # short words: whole only
+    assert lookup._match(set(), "Coal India Limited")[0] is False
+    print("[ok] typos and 1-2 letter fragments don't count as matches")
+
+    assert lookup.alias_for(" sbi ") == "SBIN" and lookup.alias_for("l & t") == "LT"
+    assert lookup.alias_for("HUL") == "HINDUNILVR" and lookup.alias_for("Infosys") is None
+    print("[ok] short-name aliases: SBI→SBIN, HUL→HINDUNILVR, L&T→LT")
 
 
 def main():
+    lookup_tests()
     planner.lookup.lookup_symbol = fake_lookup
     planner.lookup.search_company = fake_search
     planner.lookup.LookupUnavailable = __import__('data.lookup', fromlist=['x']).LookupUnavailable
@@ -114,9 +196,9 @@ def main():
 
     # Yahoo's details call fails (rate limit on a shared server) but search knows the company
     planner.lookup.lookup_symbol = lambda s: None
-    SEARCH["hdfc bank"] = [("HDFCBANK.NS", True)]
-    SEARCH["hdfcbank.ns"] = [("HDFCBANK.NS", False)]          # typed symbol: not a name match
-    SEARCH["bajaj finance"] = [("BAJFINANCE.NS", True)]
+    SEARCH["hdfc bank"] = [("HDFCBANK.NS", True, 0)]
+    SEARCH["hdfcbank.ns"] = [("HDFCBANK.NS", False, 2)]        # typed symbol: not a name match
+    SEARCH["bajaj finance"] = [("BAJFINANCE.NS", True, 0)]
     for typed in (["HDFC Bank", "Bajaj Finance"], ["HDFCBANK.NS", "Bajaj Finance"]):
         p = make_plan(typed)
         assert not p.problems, (typed, [x.message for x in p.problems])
@@ -124,6 +206,33 @@ def main():
     assert p.companies[0].industry == "Banks - Regional" and p.companies[0].market_cap is None
     planner.lookup.lookup_symbol = fake_lookup
     print("[ok] Yahoo details call failing → company taken from search instead of 'pick one'")
+
+    p = make_plan(["Sun Pharma", "Cipla"])
+    assert p.ok and [c.ticker for c in p.companies] == ["SUNPHARMA.NS", "CIPLA.NS"], p.blocking
+    p = make_plan(["Mahindra & Mahindra", "Tata Motors"])
+    assert [c.ticker for c in p.companies] == ["M&M.NS"]
+    assert p.problems[0].input == "Tata Motors" and p.problems[0].kind == "ambiguous"
+    print("[ok] name fits several: the far bigger, equally close one wins (Sun Pharma, M&M); "
+          "similar sizes stay a choice (Tata Motors)")
+
+    p = make_plan(["Tata", "Infosys"])
+    assert p.problems[0].kind == "ambiguous" and "more than one" in p.problems[0].message
+    print("[ok] 'Tata': TCS is biggest but Tata Motors fits closer → user picks")
+
+    planner.lookup.lookup_symbol = lambda s: None if s.startswith("SPARC") else fake_lookup(s)
+    p = make_plan(["Sun Pharma", "Cipla"])
+    assert p.problems and p.problems[0].kind == "ambiguous"
+    planner.lookup.lookup_symbol = fake_lookup
+    print("[ok] sizes unknown (Yahoo details call failed) → user picks, no guessing")
+
+    p = make_plan(["SBI", "HDFC Bank"])
+    assert [c.ticker for c in p.companies] == ["SBIN.NS", "HDFCBANK.NS"], p.blocking
+    planner.lookup.lookup_symbol = lambda s: None
+    SEARCH["sbin"] = [("SBIN.NS", False, 4)]
+    p = make_plan(["sbi", "HDFC Bank"])
+    assert [c.ticker for c in p.companies] == ["SBIN.NS", "HDFCBANK.NS"], p.blocking
+    planner.lookup.lookup_symbol = fake_lookup
+    print("[ok] 'SBI' → State Bank of India (not SBI Life), even when the details call fails")
 
     print("\nAll Planner tests passed.")
 

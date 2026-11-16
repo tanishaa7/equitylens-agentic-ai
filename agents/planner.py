@@ -1,7 +1,8 @@
 """Planner — checks the request before any data fetching or AI (uses no AI quota).
 
-1. Resolve each input to an NSE/BSE company: exact symbol first ('TCS', 'M&M'),
-   then name search ('kalyan jewellers').
+1. Resolve each input to an NSE/BSE company: well-known short name ('SBI', 'HUL'),
+   exact symbol ('TCS', 'M&M'), then name search ('kalyan jewellers'). If a name fits
+   several companies and one is far bigger and fits as closely ('Sun Pharma'), use it.
 2. Block with a clear message: not 2–3 companies, not found, ambiguous name,
    the same company twice, or companies in different sectors.
 3. Warn (but allow): same sector but different industry, a lender next to a
@@ -31,6 +32,7 @@ from data.ratios import is_financial
 # Social is low by design: opinion, not evidence.
 WEIGHTS = {"financials": 0.40, "news": 0.20, "market": 0.15, "macro": 0.15, "social": 0.10}
 SIZE_GAP_WARN = 20          # warn when the biggest company is 20x+ the smallest
+LEADER_SIZE = 5             # a name fitting several companies means one 5x+ the size of the rest
 _SYMBOL_RE = re.compile(r"[A-Za-z0-9&\-.^]+")
 
 
@@ -82,18 +84,20 @@ def _company(raw: str, p: dict) -> Company:
 
 def resolve(raw: str) -> Company | InputProblem:
     text = raw.strip()
-    if _SYMBOL_RE.fullmatch(text):
-        p = lookup.lookup_symbol(text)
+    alias = lookup.alias_for(text)                  # 'SBI' -> 'SBIN', 'HUL' -> 'HINDUNILVR'
+    symbol = alias or (text if _SYMBOL_RE.fullmatch(text) else None)
+    if symbol:
+        p = lookup.lookup_symbol(symbol)
         if p:
             return _company(raw, p)
 
     try:
-        found = lookup.search_company(text)
+        found = lookup.search_company(alias or text)
     except lookup.LookupUnavailable:
         return InputProblem(input=raw, kind="unavailable",
                             message=f"Couldn't reach Yahoo Finance to look up “{text}” right now. "
                                     "Please try again in a minute.")
-    typed = normalize_ticker(text) if _SYMBOL_RE.fullmatch(text) else None
+    typed = normalize_ticker(symbol) if symbol else None
     exact = [c for c in found if c["exact"] or c["ticker"] == typed]
     if len(exact) == 1:
         p = lookup.lookup_symbol(exact[0]["ticker"])
@@ -103,6 +107,10 @@ def resolve(raw: str) -> Company | InputProblem:
             # Yahoo's details call failed (often a rate limit on shared servers) but its
             # search knows this company — use that rather than asking the user to pick it.
             return _company(raw, {**exact[0], "market_cap": None})
+    elif len(exact) > 1:
+        p = _clear_leader(exact)
+        if p:
+            return _company(raw, p)
     options = (exact or found)[:4]
     if options:
         cands = [Candidate(ticker=c["ticker"], name=c["name"], industry=c["industry"]) for c in options]
@@ -113,6 +121,26 @@ def resolve(raw: str) -> Company | InputProblem:
     return InputProblem(input=raw, kind="not_found",
                         message=f"Couldn't find a company listed on NSE/BSE for “{text}”. "
                                 "Try its NSE symbol, e.g. TCS or HDFCBANK.")
+
+
+def _clear_leader(exact: list[dict]) -> dict | None:
+    """Of several names that all match, the obvious main company — or None if it's a real
+    choice. 'Sun Pharma' fits Sun Pharmaceutical and Sun Pharma Advanced Research, and
+    'Mahindra & Mahindra' fits M&M and M&M Financial: the first is many times bigger and
+    matches the typed name at least as closely, so it's what people mean. 'Tata Motors'
+    (two similar-sized companies) and 'Tata' (TCS is biggest but 'Tata Steel' is a closer
+    fit) stay a choice for the user."""
+    if len(exact) > 4:
+        return None
+    profiles = [lookup.lookup_symbol(c["ticker"]) for c in exact]
+    if not all(p and p.get("market_cap") for p in profiles):
+        return None                                 # can't compare sizes: let the user pick
+    ranked = sorted(zip(profiles, exact), key=lambda pc: pc[0]["market_cap"], reverse=True)
+    (top, top_c), (second, _) = ranked[0], ranked[1]
+    closest = min(c.get("extra", 0) for c in exact)
+    if top["market_cap"] >= LEADER_SIZE * second["market_cap"] and top_c.get("extra", 0) <= closest:
+        return top
+    return None
 
 
 # ---------------------------------------------------------------- checks

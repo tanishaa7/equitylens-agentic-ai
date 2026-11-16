@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+import unicodedata
 
 import yfinance as yf
 
@@ -72,8 +73,54 @@ def _lookup_symbol(ticker: str) -> dict | None:
     }
 
 
+# Short names people type that Yahoo's search doesn't map to the main company
+# ("SBI" finds SBI Life first; "HUL" and "L&T" find nothing Indian at all).
+ALIASES = {
+    "SBI": "SBIN", "HUL": "HINDUNILVR", "L&T": "LT", "L & T": "LT",
+    "RIL": "RELIANCE", "KOTAK BANK": "KOTAKBANK",
+}
+_FILLER = {"ltd", "limited", "the"}
+
+
+def alias_for(text: str) -> str | None:
+    """NSE symbol for a well-known short name ('SBI' -> 'SBIN'), else None."""
+    return ALIASES.get(re.sub(r"\s+", " ", (text or "").strip().upper()))
+
+
 def _words(s: str) -> set[str]:
-    return set(re.findall(r"[a-z0-9&]+", (s or "").lower()))
+    """Comparable words: accents, apostrophes and dots dropped ('Nestlé' -> 'nestle',
+    "Dr. Reddy's" -> 'dr', 'reddys'), 'and' read as '&', 'Ltd'/'Limited'/'The' ignored."""
+    s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
+    s = re.sub(r"['\u2019.]", "", s)
+    words = {"&" if w == "and" else w for w in re.findall(r"[a-z0-9&]+", s)}
+    return words - _FILLER
+
+
+def _word_hits(typed: str, word: str) -> bool:
+    """A typed word matches a name word it equals or starts ('pharma' -> 'pharmaceutical')."""
+    return typed == word or (len(typed) >= 3 and word.startswith(typed))
+
+
+def _match(typed: set[str], name: str) -> tuple[bool, int]:
+    """(every typed word found in the name, how many name words the user didn't type)."""
+    words = _words(name)
+    exact = bool(typed) and all(any(_word_hits(t, w) for w in words) for t in typed)
+    extra = sum(not any(_word_hits(t, w) for t in typed) for w in words)
+    return exact, extra
+
+
+def _query_variants(query: str) -> list[str]:
+    """The query, then retries Yahoo needs for names it only knows spelled one way:
+    'and' as '&' ('Larsen and Toubro'), and a possessive typed without its apostrophe
+    (nothing for 'Dr Reddys', but 'Dr Reddy' works)."""
+    words = query.split()
+    out = [query]
+    if any(w.lower() == "and" for w in words):
+        out.append(" ".join("&" if w.lower() == "and" else w for w in words))
+    for i, w in enumerate(words):
+        if len(w) >= 4 and w.lower().endswith("s") and not w.lower().endswith("ss"):
+            out.append(" ".join(words[:i] + [w[:-1]] + words[i + 1:]))
+    return out[:3]
 
 
 class LookupUnavailable(Exception):
@@ -97,23 +144,35 @@ def _search_quotes(query: str, limit: int) -> list[dict]:
 
 def search_company(query: str, limit: int = 8) -> list[dict]:
     """Indian listed equities matching a name. NSE preferred; one entry per company.
-    Each candidate has `exact` = every word typed appears as a whole word in its name.
+    Each candidate has `exact` = every word typed appears in its name (ignoring accents,
+    apostrophes and dots; a typed word may be the start of a name word, 'pharma' ->
+    'Pharmaceutical'), and `extra` = how many name words weren't typed.
     Raises LookupUnavailable if Yahoo can't be reached (after one retry)."""
-    quotes = cached_call("search", f"{query.lower().strip()}|{limit}", LOOKUP_TTL,
-                         _search_quotes, query, limit)
     typed = _words(query)
+    for q in _query_variants(query):
+        quotes = cached_call("search", f"{q.lower().strip()}|{limit}", LOOKUP_TTL,
+                             _search_quotes, q, limit)
+        out = _indian_equities(quotes, typed)
+        if out:
+            return out
+    return []
+
+
+def _indian_equities(quotes: list[dict], typed: set[str]) -> list[dict]:
     out, seen_names = [], set()
     for q in sorted(quotes, key=lambda q: q.get("exchange") != "NSI"):   # NSE first
         if (q.get("exchange") not in INDIAN_EXCHANGES or q.get("quoteType") != "EQUITY"
                 or not q.get("sector")):
             continue
-        name = clean_company_name(q.get("longname") or q.get("shortname") or "")
+        full_name = q.get("longname") or q.get("shortname") or ""
+        name = clean_company_name(full_name)
         root = q["symbol"].split(".")[0]
         name_key = re.sub(r"\b(ltd|limited|ind|india)\b|[^a-z ]", "", name.lower()).replace(" ", "")
         if root in seen_names or name_key in seen_names:
             continue   # same company listed on BSE too
         seen_names.update({root, name_key})
+        exact, extra = _match(typed, full_name)
         out.append({"ticker": q["symbol"], "name": name, "sector": q.get("sector"),
                     "industry": q.get("industry"), "exchange": INDIAN_EXCHANGES[q["exchange"]],
-                    "exact": typed <= _words(q.get("longname") or q.get("shortname") or "")})
+                    "exact": exact, "extra": extra})
     return out
