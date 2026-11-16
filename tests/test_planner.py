@@ -112,6 +112,19 @@ def main():
     assert p.ok and any("900 times larger" in w for w in p.warnings)
     print("[ok] very different sizes → warning")
 
+    # Yahoo's details call fails (rate limit on a shared server) but search knows the company
+    planner.lookup.lookup_symbol = lambda s: None
+    SEARCH["hdfc bank"] = [("HDFCBANK.NS", True)]
+    SEARCH["hdfcbank.ns"] = [("HDFCBANK.NS", False)]          # typed symbol: not a name match
+    SEARCH["bajaj finance"] = [("BAJFINANCE.NS", True)]
+    for typed in (["HDFC Bank", "Bajaj Finance"], ["HDFCBANK.NS", "Bajaj Finance"]):
+        p = make_plan(typed)
+        assert not p.problems, (typed, [x.message for x in p.problems])
+        assert [c.ticker for c in p.companies] == ["HDFCBANK.NS", "BAJFINANCE.NS"]
+    assert p.companies[0].industry == "Banks - Regional" and p.companies[0].market_cap is None
+    planner.lookup.lookup_symbol = fake_lookup
+    print("[ok] Yahoo details call failing → company taken from search instead of 'pick one'")
+
     print("\nAll Planner tests passed.")
 
 

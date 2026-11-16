@@ -48,8 +48,19 @@ def main():
     lookup._lookup_symbol = lambda t: seen.append(t) or None
     assert lookup.lookup_symbol("ZZTOP") is None and lookup.lookup_symbol("zztop") is None
     assert seen == ["ZZTOP.NS"]
+
+    # Yahoo errors (rate limits on shared servers) are never remembered as "not found"
+    def busy(t):
+        seen.append(t)
+        raise lookup._Unsure("YFRateLimitError: Too Many Requests")
+    lookup._lookup_symbol = busy
+    seen.clear()
+    assert lookup.lookup_symbol("HDFCBANK") is None and lookup.lookup_symbol("HDFCBANK") is None
+    assert seen == ["HDFCBANK.NS", "HDFCBANK.NS"], seen        # asked again, not cached
+    lookup._lookup_symbol = lambda t: {"ticker": t, "name": "HDFC Bank"}
+    assert lookup.lookup_symbol("HDFCBANK")["name"] == "HDFC Bank"
     lookup._lookup_symbol = real_lookup
-    print("[ok] symbol lookups cached for a day, including 'not found'")
+    print("[ok] symbol lookups cached for a day, including 'not found'; Yahoo errors never cached")
 
     # ---------- whole-comparison reuse
     orch.RETRY_PAUSE = 0

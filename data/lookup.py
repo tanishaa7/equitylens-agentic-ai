@@ -11,7 +11,7 @@ import yfinance as yf
 
 from data.common import clean, normalize_ticker
 from data.store import HOUR, cached_call, get, put
-from data.market import clean_company_name
+from data.market import clean_company_name, yahoo_info
 
 INDIAN_EXCHANGES = {"NSI": "NSE", "BSE": "BSE"}
 
@@ -20,25 +20,44 @@ logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
 
 LOOKUP_TTL = 24 * HOUR      # company names / sectors rarely change
+UNSURE_TTL = 1 * HOUR       # Yahoo answered with almost nothing: probably a typo, maybe a hiccup
 MISS = {"missing": True}    # cached "no such symbol", so typos don't hit Yahoo every time
+_NS, _NS_UNSURE = "lookup2", "lookup2_unsure"   # v2: earlier versions cached Yahoo errors as misses
+log = logging.getLogger("equitylens.lookup")
+
+
+class _Unsure(Exception):
+    """Yahoo gave no usable answer (error or near-empty reply) — not proof the symbol is wrong."""
 
 
 def lookup_symbol(symbol: str) -> dict | None:
-    """Profile for an exact symbol, or None if it isn't an actively traded equity."""
+    """Profile for an exact symbol, or None if it isn't an actively traded equity (or Yahoo
+    couldn't say just now). Only definite answers are remembered for a day; Yahoo errors
+    (rate limits on shared servers) are never remembered, so they can't stick."""
     ticker = normalize_ticker(symbol)
-    hit = get("lookup", ticker, LOOKUP_TTL)
-    if hit is not None:
-        return None if hit == MISS else hit
-    profile = _lookup_symbol(ticker)
-    put("lookup", ticker, profile or MISS)
+    for ns, ttl in ((_NS, LOOKUP_TTL), (_NS_UNSURE, UNSURE_TTL)):
+        hit = get(ns, ticker, ttl)
+        if hit is not None:
+            return None if hit == MISS else hit
+    try:
+        profile = _lookup_symbol(ticker)
+    except _Unsure as ex:
+        if str(ex) == "empty":
+            put(_NS_UNSURE, ticker, MISS)
+        else:
+            log.warning("Yahoo lookup for %s failed: %s", ticker, ex)
+        return None
+    put(_NS, ticker, profile or MISS)
     return profile
 
 
 def _lookup_symbol(ticker: str) -> dict | None:
     try:
-        info = yf.Ticker(ticker).info or {}
-    except Exception:
-        return None
+        info = yahoo_info(yf.Ticker(ticker))
+    except Exception as ex:                       # rate limit, timeout, network (after retries)
+        raise _Unsure(f"{type(ex).__name__}: {ex}"[:200])
+    if not info.get("quoteType"):                 # unknown symbols come back like this
+        raise _Unsure("empty")
     name = info.get("longName") or info.get("shortName")
     price = clean(info.get("currentPrice")) or clean(info.get("regularMarketPrice"))
     if not name or info.get("quoteType") != "EQUITY" or price is None:
