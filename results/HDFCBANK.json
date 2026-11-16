@@ -5,6 +5,58 @@
    "symbol": "HDFCBANK",
    "company": null,
    "template": "bank",
+   "basis": "standalone",
+   "period_type": "quarter",
+   "period_start": "2026-07-01",
+   "period_end": "2026-09-30",
+   "fy_end": "2027-03-31",
+   "audited": false,
+   "figures": {
+    "interest_earned": 834266000000.0,
+    "other_income": 138310200000.0,
+    "total_income": 972576200000.0,
+    "interest_expended": 488074200000.0,
+    "employee_cost": 67741700000.0,
+    "operating_expenses": 189667800000.0,
+    "operating_profit": 294834200000.0,
+    "provisions": 35736200000.0,
+    "exceptional_items": 0.0,
+    "profit_before_tax": 259098000000.0,
+    "tax": 63998400000.0,
+    "profit_after_tax": 195099600000.0,
+    "net_profit": 195099600000.0,
+    "net_profit_owners": 195099600000.0,
+    "eps_basic": 12.66,
+    "net_interest_income": 346191800000.0
+   },
+   "bank": {
+    "gross_npa_pct": 0.0111,
+    "net_npa_pct": 0.0037,
+    "cet1_ratio": 0.1887,
+    "at1_ratio": 0.0,
+    "roa_quarter": 0.0045,
+    "gross_npa": 358097000000.0,
+    "net_npa": 118508600000.0,
+    "deposits": 33274489300000.0,
+    "advances": 31955660600000.0
+   },
+   "checks": {
+    "passed": true,
+    "failed": []
+   },
+   "source": {
+    "kind": "xbrl",
+    "file": "INTEGRATED_FILING_BANKING_1740912_17102026054806_WEB.xml",
+    "format": "integrated filing",
+    "sha256": "8dddcb835403be82ccf2bf8cea87cc0c1f64d66652a505eb7b273986f10a94f7",
+    "board_meeting": "2026-10-17",
+    "added_at": "2026-11-16T08:26:24+00:00"
+   }
+  },
+  {
+   "symbol": "HDFCBANK",
+   "company": null,
+   "template": "bank",
    "basis": "consolidated",
    "period_type": "quarter",
    "period_start": "2026-07-01",
