@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 SUITES = ["test_llm_errors", "test_financials_agent", "test_specialists", "test_planner",
-          "test_orchestrator", "test_debate", "test_judge", "test_cache_logging", "test_limits", "test_data_sources"]
+          "test_orchestrator", "test_debate", "test_judge", "test_cache_logging", "test_limits", "test_data_sources", "test_exchange_results"]
 
 failed = []
 for s in SUITES:

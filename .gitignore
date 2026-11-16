@@ -16,3 +16,7 @@ EquityLens*.pptx
 
 # local test runs of scripts/collect_nse_filings.py
 filings_local/
+
+# sample results files for the Phase 2.0 XBRL test
+xbrl_samples/
+data_local/

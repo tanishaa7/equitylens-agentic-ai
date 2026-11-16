@@ -280,7 +280,32 @@ def _signed_pct(x):
     return "n/a" if x is None else f"{x * 100:+.1f}%"
 
 
+def _what_changed_from_filing(c: dict) -> list[str]:
+    """When an uploaded results filing is newer than Yahoo's data, report that quarter."""
+    ex = (c.get("ratios") or {}).get("exchange") or {}
+    lt = ex.get("latest")
+    if not lt or not ex.get("latest_is_newer"):
+        return []
+    f, yoy = lt["figures"], lt["yoy"]
+    where = f"{lt['quarter']} (company's results filing, {lt['basis']})"
+    if not lt["year_ago_quarter"]:
+        return [f"{where}: net profit {fmt_cr(f.get('net_profit'))}; year-ago quarter not on file"]
+    lines = [f"{where}: net profit {_signed_pct(yoy.get('net_profit'))} vs a year ago"]
+    if "net_interest_income" in yoy:
+        lines.append(f"Net interest income {_signed_pct(yoy['net_interest_income'])} vs a year ago")
+    elif "revenue" in yoy:
+        lines.append(f"Revenue {_signed_pct(yoy['revenue'])} vs a year ago")
+    b = ex.get("bank") or {}
+    prev = b.get("year_ago") or {}
+    if b.get("gross_npa_pct") is not None and prev.get("gross_npa_pct") is not None:
+        lines.append(f"Gross NPA {b['gross_npa_pct']:.2%} vs {prev['gross_npa_pct']:.2%} a year ago")
+    return lines
+
+
 def what_changed(c: dict) -> list[str]:
+    filed = _what_changed_from_filing(c)
+    if filed:
+        return filed
     q = (c.get("ratios") or {}).get("latest_quarter")
     if not q or not q["current"]:
         return []

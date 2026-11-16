@@ -11,7 +11,8 @@ from data.financials import get_financials
 from data.macro import get_macro_data
 from data.market import get_market_data
 from data.news import get_company_news, is_commentator
-from data.ratios import add_exchange_filings, compute_ratios
+from data.exchange_results import get_exchange_results
+from data.ratios import add_exchange_filings, add_exchange_results, compute_ratios
 from data.social import get_reddit_posts
 from data.store import HOUR, MIN, cached_call
 
@@ -23,6 +24,7 @@ TTL = {
     "financials_results_season": 2 * HOUR,   # new quarterly results land every day
     "news": 3 * HOUR,
     "filings": 3 * HOUR,
+    "exchange_results": 1 * HOUR,     # cleared as soon as someone uploads a file
     "social": 3 * HOUR,
     "macro": 3 * HOUR,
 }
@@ -56,6 +58,10 @@ def collect_company(ticker: str, parts=ALL_PARTS) -> dict:
                           ok=lambda v: bool(v["annual"]))
         out["financials"] = fin
         out["ratios"] = compute_ratios(fin, market)   # cheap, and depends on today's price
+        symbol = ticker.split(".")[0]
+        out["exchange_results"] = cached_call("exchange_results", symbol, TTL["exchange_results"],
+                                              get_exchange_results, symbol, ok=_ok_status)
+        add_exchange_results(out["ratios"], out["exchange_results"])
     if "news" in parts:
         symbol = ticker.split(".")[0]
         commentator = is_commentator(market.get("industry"), market["name"])

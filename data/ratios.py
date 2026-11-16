@@ -212,10 +212,13 @@ def add_exchange_filings(ratios: dict, filings: dict | None) -> dict:
         return ratios
     fy_end = cov.get("fy_end_month") or 3
     newest = cov.get("newest_quarter_end")
+    have = set(cov.get("from_filings") or {})
     filed = []
     for f in filings.get("results_filed") or []:
         q_end = date.fromisoformat(f["quarter_end"])
         if newest and q_end <= date.fromisoformat(newest):
+            continue
+        if quarter_label(pd.Timestamp(q_end), fy_end) in have:
             continue
         filed.append({"quarter": quarter_label(pd.Timestamp(q_end), fy_end),
                       "quarter_end": f["quarter_end"], "filed": (f.get("filed") or "")[:10],
@@ -247,6 +250,54 @@ def _day(iso: str) -> str:
         return iso or "a recent date"
 
 
+_COVERAGE_PREFIXES = ("Our data source (Yahoo Finance) does not have",
+                      "Quarter(s) missing from the data source")
+
+
+def _coverage_warnings(cov: dict) -> list[str]:
+    out = []
+    if cov["not_in_source_yet"]:
+        q = cov["not_in_source_yet"]
+        newest = cov["quarters_on_file"][0] if cov["quarters_on_file"] else "none"
+        out.append(
+            f"Our data source (Yahoo Finance) does not have {', '.join(q)} results yet, although "
+            f"the filing deadline has passed — the company has most likely published them on "
+            f"NSE/BSE. Newest quarter in our data: {newest}.")
+    if cov["missing_quarters"]:
+        out.append(
+            f"Quarter(s) missing from the data source: {', '.join(cov['missing_quarters'])}. "
+            "Comparisons that need them (same quarter last year, last-12-months totals) "
+            "are not available — this is a data gap, not a sign the results were not published.")
+    return out
+
+
+def add_exchange_results(ratios: dict, exch: dict | None, basis: str = "consolidated") -> dict:
+    """Quarters from the company's own XBRL filings (uploaded) fill gaps in Yahoo's data:
+    they stop counting as missing, and the newest one becomes the latest quarter for
+    the analysis when Yahoo is behind. Adds ratios["exchange"]. Returns `ratios`."""
+    from data.exchange_results import summarise
+    cov = ratios.get("coverage")
+    if not cov or not exch or not exch.get("filings"):
+        return ratios
+    summary = summarise(exch["filings"], cov.get("fy_end_month") or 3, basis)
+    if not summary:
+        return ratios
+    have = set(summary["quarters"])
+    cov["from_filings"] = summary["quarters"]
+    cov["missing_quarters"] = [q for q in cov["missing_quarters"] if q not in have]
+    cov["not_in_source_yet"] = [q for q in cov["not_in_source_yet"] if q not in have]
+    latest = summary["latest"]
+    newest_yahoo = cov.get("newest_quarter_end")
+    summary["latest_is_newer"] = bool(latest) and (newest_yahoo is None
+                                                   or latest["period_end"] > newest_yahoo)
+    if summary["latest_is_newer"] and cov.get("pending_note") and latest["quarter"] in cov["pending_note"]:
+        cov["pending_note"] = None
+    ratios["exchange"] = summary
+    ratios["data_warnings"] = _coverage_warnings(cov) + [
+        w for w in ratios["data_warnings"] if not w.startswith(_COVERAGE_PREFIXES)]
+    return ratios
+
+
 def _relative_gap(a, b):
     if a is None or b is None or b == 0:
         return None
@@ -260,18 +311,7 @@ def _data_warnings(fin, market, by_year, valuation, latest_q, cov, today) -> lis
         if age > 450:
             warnings.append(f"Latest annual data is {fin['annual'][0]['period']} "
                             f"({age} days old) — newer results may be missing.")
-    if cov["not_in_source_yet"]:
-        q = cov["not_in_source_yet"]
-        newest = cov["quarters_on_file"][0] if cov["quarters_on_file"] else "none"
-        warnings.append(
-            f"Our data source (Yahoo Finance) does not have {', '.join(q)} results yet, although "
-            f"the filing deadline has passed — the company has most likely published them on "
-            f"NSE/BSE. Newest quarter in our data: {newest}.")
-    if cov["missing_quarters"]:
-        warnings.append(
-            f"Quarter(s) missing from the data source: {', '.join(cov['missing_quarters'])}. "
-            "Comparisons that need them (same quarter last year, last-12-months totals) "
-            "are not available — this is a data gap, not a sign the results were not published.")
+    warnings += _coverage_warnings(cov)
     gap = _relative_gap(valuation["pe"], market.get("yahoo_trailing_pe"))
     if gap is not None and gap > 0.15:
         warnings.append(f"Our P/E ({valuation['pe']:.1f}) differs from Yahoo's "

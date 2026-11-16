@@ -72,6 +72,24 @@ FILINGS_BASE_URL = os.getenv(
     "https://raw.githubusercontent.com/tanishaa7/equitylens-agentic-ai/data/filings/nse")
 FILINGS_DIR = os.getenv("EQUITYLENS_FILINGS_DIR", "")
 
+# --- Shared storage for uploads (results files, concall summaries): the `data` branch ---
+DATA_REPO = os.getenv("EQUITYLENS_DATA_REPO", "tanishaa7/equitylens-agentic-ai")
+DATA_BRANCH = os.getenv("EQUITYLENS_DATA_BRANCH", "data")
+DATA_DIR = os.getenv("EQUITYLENS_DATA_DIR", "")      # local folder instead (tests, offline)
+
+
+def github_token() -> str:
+    """Token that lets the app save to the data branch (fine-grained, this repo only,
+    Contents: read and write). Looked up at call time, like the Gemini key."""
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    if not token:
+        try:
+            import streamlit as st
+            token = "".join(str(st.secrets.get("GITHUB_TOKEN", "")).split())
+        except Exception:   # no secrets configured
+            pass
+    return token
+
 # --- Paths ---
 CACHE_DIR = ROOT / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
