@@ -1,8 +1,8 @@
 {
   "history_starts": "2026-11-16T12:40:28+05:30",
-  "last_run": "2026-11-21T16:34:05+05:30",
-  "last_run_items": 188,
-  "last_run_added": 166,
+  "last_run": "2026-11-22T00:48:22+05:30",
+  "last_run_items": 23,
+  "last_run_added": 4,
   "last_run_errors": {},
   "source": "NSE official RSS feeds",
   "feeds": {
@@ -10,5 +10,5 @@
     "board_meeting": "https://nsearchives.nseindia.com/content/RSS/Board_Meetings.xml",
     "corporate_action": "https://nsearchives.nseindia.com/content/RSS/Corporate_action.xml"
   },
-  "last_success": "2026-11-21T16:34:05+05:30"
+  "last_success": "2026-11-22T00:48:22+05:30"
 }
